@@ -6,6 +6,7 @@ import Layout    from './components/Layout'
 import Login     from './pages/Login'
 import Register  from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Products from './pages/Products'
 // On ajoutera les autres pages au fil des phases
 
 // ─── Guard ───────────────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ export default function App() {
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
+        <Route path="products" element={<Products />} />
         {/* Phase 3+ : on ajoutera /products, /sales, etc. */}
       </Route>
 
