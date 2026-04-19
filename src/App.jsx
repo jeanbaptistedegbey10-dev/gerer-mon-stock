@@ -7,6 +7,8 @@ import Login     from './pages/Login'
 import Register  from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
+import Sales    from './pages/Sales'
+import NewSale  from './pages/NewSale'
 // On ajoutera les autres pages au fil des phases
 
 // ─── Guard ───────────────────────────────────────────────────────────────────
@@ -52,6 +54,8 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="products" element={<Products />} />
+        <Route path="sales"     element={<Sales />} />
+        <Route path="sales/new" element={<NewSale />} />
         {/* Phase 3+ : on ajoutera /products, /sales, etc. */}
       </Route>
 
