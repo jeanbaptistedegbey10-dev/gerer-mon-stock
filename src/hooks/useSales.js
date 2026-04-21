@@ -37,22 +37,23 @@ export function useSales() {
 
   // ─── Créer une vente complète (atomique) ──────────────────────────────────
   // cartItems = [{ product, quantity, unit_price }]
-  const createSale = async ({ cartItems, clientName, status }) => {
-    const total = cartItems.reduce((s, i) => s + i.unit_price * i.quantity, 0)
+  const createSale = async ({ cartItems, clientName, clientPhone, status, discount, discountType, total }) => {
+  const { data: saleData, error: saleError } = await supabase
+    .from('sales')
+    .insert({
+      user_id:       user.id,
+      client_name:   clientName   || null,
+      client_phone:  clientPhone  || null,
+      total:         total,           // total après réduction
+      discount:      discount || 0,
+      discount_type: discountType || 'amount',
+      status:        status || 'payé',
+    })
+    .select()
+    .single()
 
-    // 1. Créer la vente principale
-    const { data: saleData, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        user_id:     user.id,
-        client_name: clientName || null,
-        total,
-        status:      status || 'payé',
-      })
-      .select()
-      .single()
-
-    if (saleError) throw saleError
+  if (saleError) throw saleError
+  // ... reste inchangé
 
     // 2. Créer les lignes de vente
     const saleItems = cartItems.map(i => ({
