@@ -4,24 +4,25 @@ import { useProducts }  from '../hooks/useProducts'
 import { Plus, X, TrendingDown, Package } from 'lucide-react'
 
 function PurchaseModal({ products, onClose, onSave }) {
-  const [form,    setForm]    = useState({
-    product_id:      '',
-    product_name:    '',
-    supplier:        '',
+  const [form, setForm] = useState({
+    product_id:        '',
+    product_name:      '',
+    supplier:          '',
     quantity_received: '',
-    subtotal:        '',
-    transport_cost:  '',
-    customs_cost:    '',
-    status:          'reçu',
-    notes:           '',
+    transport_cost:    '',
+    customs_cost:      '',
+    status:            'reçu',
+    notes:             '',
   })
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  // Fournisseurs uniques depuis les produits
   const suppliers = [...new Set(products.map(p => p.supplier).filter(Boolean))]
+
+  // Produit sélectionné
+  const selectedProduct = products.find(p => p.id === form.product_id)
 
   // Quand on sélectionne un produit → pré-remplir fournisseur
   const handleProductChange = (e) => {
@@ -32,26 +33,23 @@ function PurchaseModal({ products, onClose, onSave }) {
       product_id:   product.id,
       product_name: product.name,
       supplier:     product.supplier || f.supplier,
-      subtotal:     product.purchase_price
-        ? String(product.purchase_price)
-        : f.subtotal,
     }))
   }
 
-  const total =
-    (parseFloat(form.subtotal)       || 0) +
-    (parseFloat(form.transport_cost) || 0) +
-    (parseFloat(form.customs_cost)   || 0)
+  // ── Calculs automatiques ──────────────────────────────────────────────────
+  const qty           = parseInt(form.quantity_received)  || 0
+  const prixAchat     = selectedProduct?.purchase_price   || 0
+  const transport     = parseFloat(form.transport_cost)   || 0
+  const douane        = parseFloat(form.customs_cost)     || 0
 
-  // Coût unitaire réel (avec frais)
-  const unitCost = form.quantity_received > 0
-    ? (total / parseInt(form.quantity_received)).toFixed(0)
-    : null
+  const coutProduits  = prixAchat * qty                   // non modifiable
+  const coutTotal     = coutProduits + transport + douane
+  const coutUnitaire  = qty > 0 ? coutTotal / qty : 0
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.product_id)         return setError('Sélectionnez un produit.')
-    if (!form.quantity_received)  return setError('Indiquez la quantité reçue.')
+    if (!form.product_id)        return setError('Sélectionnez un produit.')
+    if (!form.quantity_received) return setError('Indiquez la quantité reçue.')
     setError('')
     setLoading(true)
     try {
@@ -59,10 +57,11 @@ function PurchaseModal({ products, onClose, onSave }) {
         product_id:        form.product_id,
         product_name:      form.product_name,
         supplier:          form.supplier,
-        quantity_received: parseInt(form.quantity_received),
-        subtotal:          parseFloat(form.subtotal)       || 0,
-        transport_cost:    parseFloat(form.transport_cost) || 0,
-        customs_cost:      parseFloat(form.customs_cost)   || 0,
+        quantity_received: qty,
+        subtotal:          coutProduits,   // prix_achat * qté
+        transport_cost:    transport,
+        customs_cost:      douane,
+        cout_unitaire_reel: coutUnitaire,  // coût réel/unité stocké
         status:            form.status,
         notes:             form.notes,
       })
@@ -103,8 +102,7 @@ function PurchaseModal({ products, onClose, onSave }) {
               <option value="">-- Sélectionner un produit --</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.name} {p.category ? `(${p.category})` : ''}
-                  {' — Stock actuel : '}{p.quantity}
+                  {p.name} — Stock : {p.quantity} — Prix achat : {p.purchase_price.toLocaleString('fr-FR')} FCFA
                 </option>
               ))}
             </select>
@@ -115,21 +113,19 @@ function PurchaseModal({ products, onClose, onSave }) {
             <label className="label">Fournisseur *</label>
             <select className="input" value={form.supplier}
               onChange={set('supplier')} required>
-              <option value="">-- Sélectionner un fournisseur --</option>
+              <option value="">-- Sélectionner --</option>
               {suppliers.map(s => (
                 <option key={s} value={s}>{s}</option>
               ))}
-              <option value="__autre__">Autre (saisir manuellement)</option>
+              <option value="__autre__">Autre...</option>
             </select>
-            {/* Champ libre si "Autre" */}
             {form.supplier === '__autre__' && (
-              <input className="input mt-2"
-                placeholder="Nom du fournisseur..."
+              <input className="input mt-2" placeholder="Nom du fournisseur..."
                 onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
             )}
           </div>
 
-          {/* Quantité reçue */}
+          {/* Quantité */}
           <div>
             <label className="label">Quantité reçue *</label>
             <input type="number" className="input" placeholder="0" min="1"
@@ -137,46 +133,75 @@ function PurchaseModal({ products, onClose, onSave }) {
               onChange={set('quantity_received')} required />
           </div>
 
-          {/* Coûts */}
-          <div className="space-y-3">
-            <div>
-              <label className="label">Coût produits (FCFA)</label>
-              <input type="number" className="input" placeholder="0" min="0"
-                value={form.subtotal} onChange={set('subtotal')} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="label">Transport (FCFA)</label>
-                <input type="number" className="input" placeholder="0" min="0"
-                  value={form.transport_cost} onChange={set('transport_cost')} />
-              </div>
-              <div>
-                <label className="label">Douane (FCFA)</label>
-                <input type="number" className="input" placeholder="0" min="0"
-                  value={form.customs_cost} onChange={set('customs_cost')} />
-              </div>
+          {/* Coût produits — lecture seule, calculé auto */}
+          <div>
+            <label className="label">
+              Coût produits (FCFA)
+              <span className="ml-1 text-gray-400 font-normal">
+                — calculé automatiquement
+              </span>
+            </label>
+            <div className="input bg-gray-50 text-gray-500 cursor-not-allowed
+                            flex items-center justify-between">
+              <span>
+                {selectedProduct
+                  ? `${selectedProduct.purchase_price.toLocaleString('fr-FR')} × ${qty || 0}`
+                  : 'Sélectionnez un produit'}
+              </span>
+              <span className="font-semibold text-gray-700">
+                {coutProduits > 0
+                  ? `= ${coutProduits.toLocaleString('fr-FR')} FCFA`
+                  : '—'}
+              </span>
             </div>
           </div>
 
-          {/* Récap coût réel */}
-          {total > 0 && (
-            <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-blue-700 flex items-center gap-2">
-                  <TrendingDown size={14} /> Coût total
-                </span>
-                <span className="font-heading font-bold text-blue-700">
-                  {total.toLocaleString('fr-FR')} FCFA
-                </span>
+          {/* Transport + Douane — modifiables */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Transport (FCFA)</label>
+              <input type="number" className="input" placeholder="0" min="0"
+                value={form.transport_cost} onChange={set('transport_cost')} />
+            </div>
+            <div>
+              <label className="label">Douane (FCFA)</label>
+              <input type="number" className="input" placeholder="0" min="0"
+                value={form.customs_cost} onChange={set('customs_cost')} />
+            </div>
+          </div>
+
+          {/* Récap coût — visible dès qu'un produit + quantité sont sélectionnés */}
+          {selectedProduct && qty > 0 && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-2">
+              <div className="flex justify-between text-sm text-blue-700">
+                <span>Coût produits</span>
+                <span>{coutProduits.toLocaleString('fr-FR')} FCFA</span>
               </div>
-              {unitCost && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-blue-500">Coût réel / unité</span>
-                  <span className="text-xs font-semibold text-blue-600">
-                    {parseInt(unitCost).toLocaleString('fr-FR')} FCFA
-                  </span>
+              {transport > 0 && (
+                <div className="flex justify-between text-sm text-blue-600">
+                  <span>Transport</span>
+                  <span>+ {transport.toLocaleString('fr-FR')} FCFA</span>
                 </div>
               )}
+              {douane > 0 && (
+                <div className="flex justify-between text-sm text-blue-600">
+                  <span>Douane</span>
+                  <span>+ {douane.toLocaleString('fr-FR')} FCFA</span>
+                </div>
+              )}
+              <div className="border-t border-blue-200 pt-2 flex justify-between
+                              font-heading font-semibold text-blue-800">
+                <span className="flex items-center gap-1">
+                  <TrendingDown size={14} /> Coût total
+                </span>
+                <span>{coutTotal.toLocaleString('fr-FR')} FCFA</span>
+              </div>
+              <div className="flex justify-between text-xs text-blue-600">
+                <span>Coût réel / unité</span>
+                <span className="font-semibold">
+                  {Math.round(coutUnitaire).toLocaleString('fr-FR')} FCFA
+                </span>
+              </div>
             </div>
           )}
 

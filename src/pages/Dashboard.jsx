@@ -81,23 +81,21 @@ export default function Dashboard() {
           accent="bg-primary"
         />
         <KpiCard
-          label="Bénéfice estimé"
-          value={(kpis?.todayBenef || 0).toLocaleString('fr-FR')}
-          unit="FCFA"
-          sub="Marge ~25%"
-          subColor="text-green-600"
-          accent="bg-green-500"
-        />
-        <KpiCard
-          label="Articles en stock"
-          value={(kpis?.totalStock || 0).toLocaleString('fr-FR')}
-          unit="unités"
-          sub={kpis?.lowStockCount > 0
-            ? `⚠ ${kpis.lowStockCount} en stock faible`
-            : 'Stock OK'}
-          subColor={kpis?.lowStockCount > 0 ? 'text-amber-500' : 'text-gray-400'}
-          accent="bg-amber-400"
-        />
+            label="Bénéfice estimé"
+            value={(kpis?.todayBenef || 0).toLocaleString('fr-FR')}
+            unit="FCFA"
+            sub={`Marge moy. ${kpis?.margeAffichee || 0}%`}   // ← marge réelle
+            subColor="text-green-600"
+            accent="bg-green-500"
+          />
+       <KpiCard
+  label="Valeur du stock"
+  value={(kpis?.valeurStock || 0).toLocaleString('fr-FR')}
+  unit="FCFA"
+  sub={`${kpis?.totalStock || 0} unités en stock`}   // ← valeur réelle
+  subColor="text-gray-400"
+  accent="bg-amber-400"
+/>
         <KpiCard
           label="Alertes stock"
           value={kpis?.lowStockCount || 0}
