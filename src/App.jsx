@@ -11,6 +11,7 @@ import Sales    from './pages/Sales'
 import NewSale  from './pages/NewSale'
 import Stock    from './pages/Stock'
 import Purchases from './pages/Purchases'
+import Deliveries from './pages/Deliveries'
 // On ajoutera les autres pages au fil des phases
 
 // ─── Guard ───────────────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="sales/new" element={<NewSale />} />
         <Route path="stock"     element={<Stock />} />
         <Route path="purchases" element={<Purchases />} />
+        <Route path="deliveries" element={<Deliveries />} />
         {/* Phase 3+ : on ajoutera /products, /sales, etc. */}
       </Route>
 
