@@ -15,6 +15,7 @@ const NAV_GROUPS = [
       { to: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard'   },
       { to: '/products',   icon: Package,          label: 'Produits'    },
       { to: '/stock',      icon: Warehouse,         label: 'Stock'       },
+      
     ],
   },
   {
@@ -23,6 +24,7 @@ const NAV_GROUPS = [
       { to: '/purchases',  icon: ShoppingBag, label: 'Achats'      },
       { to: '/sales',      icon: DollarSign,  label: 'Ventes'      },
       { to: '/deliveries', icon: Truck,        label: 'Livraisons'  },
+      { to: '/drivers', icon: Truck, label: 'Livreurs' },
     ],
   },
   {

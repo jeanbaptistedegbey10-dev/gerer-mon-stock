@@ -52,7 +52,6 @@ export function useDeliveries() {
       .eq('id', id)
       .eq('user_id', user.id)
     if (error) throw error
-    // Optimistic update
     setDeliveries(prev =>
       prev.map(d => d.id === id ? { ...d, status } : d)
     )
@@ -69,6 +68,11 @@ export function useDeliveries() {
     setDeliveries(prev => prev.filter(d => d.id !== id))
   }
 
+  // ── IDs des ventes déjà liées à une livraison ─────────────────────────────
+  const usedSaleIds = deliveries
+    .filter(d => d.sale_id)
+    .map(d => d.sale_id)
+
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = {
     total:      deliveries.length,
@@ -82,7 +86,7 @@ export function useDeliveries() {
   }
 
   return {
-    deliveries, loading, error, stats,
+    deliveries, loading, error, stats, usedSaleIds,
     createDelivery, updateStatus, deleteDelivery,
     refresh: fetch,
   }
