@@ -1,12 +1,13 @@
 import { useStore } from '../store/useStore'
-import { useTeam }  from './useTeam'
 
-// ── Définition des permissions par rôle ──────────────────────────────────────
-const PERMISSIONS = {
+// ── Permissions par rôle ──────────────────────────────────────────────────────
+const ROLE_PERMISSIONS = {
+  superadmin: ['*'], // tout
+
   admin: [
     'view_dashboard',
     'view_products',   'manage_products',
-    'view_stock',
+    'view_stock',      'manage_stock',
     'view_purchases',  'manage_purchases',
     'view_sales',      'manage_sales',
     'view_deliveries', 'manage_deliveries',
@@ -15,6 +16,7 @@ const PERMISSIONS = {
     'view_users',      'manage_users',
     'view_settings',   'manage_settings',
   ],
+
   manager: [
     'view_dashboard',
     'view_products',   'manage_products',
@@ -24,30 +26,50 @@ const PERMISSIONS = {
     'view_deliveries', 'manage_deliveries',
     'view_drivers',
     'view_reports',
+    'view_users',
   ],
-  employee: [
+
+  caissier: [
     'view_dashboard',
     'view_stock',
     'view_sales',      'manage_sales',
-    'view_deliveries',
+    'view_products',
+  ],
+
+  vendeur: [
+    'view_dashboard',
+    'view_stock',
+    'view_products',
+    'view_sales',      'manage_sales',
+  ],
+
+  livreur: [
+    'view_dashboard',
+    'view_deliveries', 'manage_deliveries',
+  ],
+
+  comptable: [
+    'view_dashboard',
+    'view_sales',
+    'view_purchases',
+    'view_reports',
+    'view_stock',
   ],
 }
 
 export function usePermissions() {
-  const { user }   = useStore()
-  const { members } = useTeam()
+  const { myRole, isSuperAdmin } = useStore()
 
-  // Trouver le rôle de l'utilisateur connecté
-  // Si c'est le owner (pas dans team_members) → admin par défaut
-  const currentMember = members.find(m => m.member_id === user?.id)
-  const role = currentMember?.role || 'admin'
+  const role = isSuperAdmin ? 'superadmin' : (myRole || 'vendeur')
 
   const can = (permission) => {
-    const perms = PERMISSIONS[role] || PERMISSIONS.employee
+    const perms = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.vendeur
+    // superadmin a tout
+    if (perms.includes('*')) return true
     return perms.includes(permission)
   }
 
   const canAny = (...permissions) => permissions.some(p => can(p))
 
-  return { role, can, canAny, currentMember }
+  return { role, can, canAny }
 }

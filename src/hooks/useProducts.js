@@ -2,18 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useStore } from '../store/useStore'
 
-// ─── Compression image → max 8ko ─────────────────────────────────────────────
 export async function compressImage(file, maxKb = 8) {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       const img = new Image()
       img.onload = () => {
-        const canvas  = document.createElement('canvas')
-        let quality   = 0.9
+        const canvas = document.createElement('canvas')
+        let quality  = 0.9
         let { width, height } = img
-
-        // Réduire les dimensions si trop grand
         const maxDim = 200
         if (width > maxDim || height > maxDim) {
           if (width > height) {
@@ -24,13 +21,10 @@ export async function compressImage(file, maxKb = 8) {
             height = maxDim
           }
         }
-
         canvas.width  = width
         canvas.height = height
         const ctx = canvas.getContext('2d')
         ctx.drawImage(img, 0, 0, width, height)
-
-        // Boucle de compression jusqu'à < maxKb
         const compress = () => {
           canvas.toBlob(
             (blob) => {
@@ -41,8 +35,7 @@ export async function compressImage(file, maxKb = 8) {
                 resolve(new File([blob], file.name, { type: 'image/jpeg' }))
               }
             },
-            'image/jpeg',
-            quality
+            'image/jpeg', quality
           )
         }
         compress()
@@ -53,40 +46,34 @@ export async function compressImage(file, maxKb = 8) {
   })
 }
 
-// ─── Upload vers Supabase Storage ────────────────────────────────────────────
 export async function uploadProductImage(file, userId) {
   const compressed = await compressImage(file, 8)
-  const ext        = 'jpg'
-  const path       = `${userId}/${Date.now()}.${ext}`
-
-  const { error } = await supabase.storage
+  const path       = `${userId}/${Date.now()}.jpg`
+  const { error }  = await supabase.storage
     .from('product-images')
     .upload(path, compressed, { upsert: true })
-
   if (error) throw error
-
   const { data } = supabase.storage
     .from('product-images')
     .getPublicUrl(path)
-
   return data.publicUrl
 }
 
 export function useProducts() {
-  const { user } = useStore()
+  const { user, tenant } = useStore()
   const [products, setProducts] = useState([])
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
 
   const fetch = useCallback(async () => {
-    if (!user) return
+    if (!tenant) return
     setLoading(true)
     setError(null)
     try {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('tenant_id', tenant.id)          // ← tenant_id
         .order('created_at', { ascending: false })
       if (error) throw error
       setProducts(data || [])
@@ -95,14 +82,18 @@ export function useProducts() {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [tenant])
 
   useEffect(() => { fetch() }, [fetch])
 
   const createProduct = async (formData) => {
     const { error } = await supabase
       .from('products')
-      .insert({ ...formData, user_id: user.id })
+      .insert({
+        ...formData,
+        tenant_id: tenant.id,                // ← tenant_id
+        user_id:   user.id,
+      })
     if (error) throw error
     await fetch()
   }
@@ -112,7 +103,7 @@ export function useProducts() {
       .from('products')
       .update(formData)
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('tenant_id', tenant.id)            // ← tenant_id
     if (error) throw error
     await fetch()
   }
@@ -122,12 +113,11 @@ export function useProducts() {
       .from('products')
       .delete()
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('tenant_id', tenant.id)            // ← tenant_id
     if (error) throw error
     setProducts(prev => prev.filter(p => p.id !== id))
   }
 
-  // Fournisseurs uniques extraits des produits
   const suppliers = [...new Set(
     products.map(p => p.supplier).filter(Boolean)
   )]
