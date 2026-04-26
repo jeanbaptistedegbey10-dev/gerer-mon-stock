@@ -18,7 +18,7 @@ import UsersPage       from './pages/Users'
 import Settings        from './pages/Settings'
 
 function ProtectedRoute({ children }) {
-  const { user, tenant, loading } = useStore()
+  const { user, tenant, myRole, loading } = useStore()
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -38,8 +38,11 @@ function ProtectedRoute({ children }) {
 
   if (!user) return <Navigate to="/login" replace />
 
-  // User connecté mais pas de tenant → onboarding
-  if (!tenant) return <Navigate to="/onboarding" replace />
+  // Ne rediriger vers onboarding QUE si le chargement est terminé
+  // ET qu'il n'y a vraiment pas de tenant
+  if (!loading && !tenant && myRole === null) {
+    return <Navigate to="/onboarding" replace />
+  }
 
   return children
 }
