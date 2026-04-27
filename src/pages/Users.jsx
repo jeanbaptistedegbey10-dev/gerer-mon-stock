@@ -6,7 +6,7 @@ import {
   Plus, X, Mail, Shield, CheckCircle2,
   Clock, XCircle, Trash2, RefreshCw,
   Crown, Users, ChevronDown, Building2,
-  AlertTriangle
+  AlertTriangle, Eye, EyeOff
 } from 'lucide-react'
 
 // ── Config rôles ──────────────────────────────────────────────────────────────
@@ -36,23 +36,35 @@ const ROLE_PERMS = {
 }
 
 // ── Modal invitation ──────────────────────────────────────────────────────────
-function InviteModal({ tenant, membersCount, onClose, onSave }) {
-  const [form,    setForm]    = useState({ email: '', fullName: '', role: 'vendeur' })
+function CreateMemberModal({ tenant, membersCount, onClose, onSave }) {
+  const [form,    setForm]    = useState({
+    email:    '',
+    password: '',
+    confirm:  '',
+    fullName: '',
+    role:     'vendeur',
+  })
+  const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  // Vérifier limite du plan
-  const maxUsers   = tenant?.max_users
+  const maxUsers      = tenant?.max_users
   const limitAtteinte = maxUsers && membersCount >= maxUsers
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (limitAtteinte)
-      return setError(`Limite de ${maxUsers} utilisateurs atteinte. Passez au plan supérieur.`)
+      return setError(`Limite de ${maxUsers} utilisateurs atteinte.`)
     if (!form.email)    return setError('L\'email est obligatoire.')
     if (!form.fullName) return setError('Le nom est obligatoire.')
+    if (!form.password) return setError('Le mot de passe est obligatoire.')
+    if (form.password.length < 6)
+      return setError('Mot de passe minimum 6 caractères.')
+    if (form.password !== form.confirm)
+      return setError('Les mots de passe ne correspondent pas.')
+
     setError('')
     setLoading(true)
     try {
@@ -68,10 +80,11 @@ function InviteModal({ tenant, membersCount, onClose, onSave }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm
                     flex items-center justify-center p-4">
-      <div className="card w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+      <div className="card w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5
+                        border-b border-gray-100">
           <h2 className="font-heading font-semibold text-gray-900">
-            Inviter un membre
+            Créer un compte employé
           </h2>
           <button onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
@@ -91,29 +104,61 @@ function InviteModal({ tenant, membersCount, onClose, onSave }) {
                             px-4 py-3 flex items-center gap-2">
               <AlertTriangle size={16} className="text-amber-500 flex-shrink-0" />
               <p className="text-sm text-amber-700">
-                Limite de <strong>{maxUsers}</strong> utilisateurs atteinte
-                sur votre plan <strong>{tenant?.plan}</strong>.
+                Limite de <strong>{maxUsers}</strong> utilisateurs atteinte.
               </p>
             </div>
           )}
 
-          <div>
-            <label className="label flex items-center gap-1">
-              <Mail size={11} /> Email *
-            </label>
-            <input type="email" className="input"
-              placeholder="employe@exemple.com"
-              value={form.email} onChange={set('email')}
-              required disabled={limitAtteinte} />
-          </div>
-
+          {/* Infos employé */}
           <div>
             <label className="label">Nom complet *</label>
             <input className="input" placeholder="Prénom Nom"
               value={form.fullName} onChange={set('fullName')}
+              required autoFocus disabled={limitAtteinte} />
+          </div>
+
+          <div>
+            <label className="label flex items-center gap-1">
+              <Mail size={11} /> Email de connexion *
+            </label>
+            <input type="email" className="input"
+              placeholder="employe@votreboutique.com"
+              value={form.email} onChange={set('email')}
+              required disabled={limitAtteinte} />
+            <p className="text-xs text-gray-400 mt-1">
+              Cet email sera utilisé par l'employé pour se connecter.
+              Aucun email ne lui sera envoyé.
+            </p>
+          </div>
+
+          {/* Mot de passe défini par l'admin */}
+          <div>
+            <label className="label">Mot de passe *</label>
+            <div className="relative">
+              <input
+                type={showPwd ? 'text' : 'password'}
+                className="input pr-10"
+                placeholder="Minimum 6 caractères"
+                value={form.password} onChange={set('password')}
+                required disabled={limitAtteinte} />
+              <button type="button"
+                onClick={() => setShowPwd(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2
+                           text-gray-400 hover:text-gray-600">
+                {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Confirmer le mot de passe *</label>
+            <input type="password" className="input"
+              placeholder="••••••••"
+              value={form.confirm} onChange={set('confirm')}
               required disabled={limitAtteinte} />
           </div>
 
+          {/* Rôle */}
           <div>
             <label className="label flex items-center gap-1">
               <Shield size={11} /> Rôle *
@@ -142,9 +187,7 @@ function InviteModal({ tenant, membersCount, onClose, onSave }) {
                           {cfg.label}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {cfg.desc}
-                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">{cfg.desc}</p>
                     </div>
                   </label>
                 )
@@ -152,11 +195,21 @@ function InviteModal({ tenant, membersCount, onClose, onSave }) {
             </div>
           </div>
 
-          <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
-            <p className="text-xs text-blue-700">
-              ℹ️ L'employé doit créer un compte avec cet email exact.
-              Il sera automatiquement rattaché à votre entreprise
-              <strong> {tenant?.name}</strong>.
+          {/* Résumé */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg
+                          px-4 py-3 space-y-1">
+            <p className="text-xs font-medium text-blue-700">
+              Récapitulatif du compte :
+            </p>
+            <p className="text-xs text-blue-600">
+              👤 <strong>{form.fullName || '...'}</strong> ·
+              {' '}{ROLES[form.role]?.label}
+            </p>
+            <p className="text-xs text-blue-600">
+              📧 Se connecte avec : <strong>{form.email || '...'}</strong>
+            </p>
+            <p className="text-xs text-blue-600">
+              🏢 Entreprise : <strong>{tenant?.name}</strong>
             </p>
           </div>
 
@@ -165,7 +218,7 @@ function InviteModal({ tenant, membersCount, onClose, onSave }) {
               className="btn flex-1 justify-center">Annuler</button>
             <button type="submit" disabled={loading || limitAtteinte}
               className="btn btn-primary flex-1 justify-center">
-              {loading ? 'Invitation...' : 'Inviter'}
+              {loading ? 'Création...' : 'Créer le compte'}
             </button>
           </div>
         </form>
@@ -201,24 +254,29 @@ export default function UsersPage() {
 
   useEffect(() => { fetchMembers() }, [tenant])
 
-  const inviteMember = async ({ email, fullName, role }) => {
-    const exists = members.find(m =>
-      m.email.toLowerCase() === email.toLowerCase()
-    )
-    if (exists) throw new Error('Cet email est déjà dans votre équipe.')
+  const createMember = async ({ email, password, fullName, role }) => {
+  // Vérifier doublon
+  const exists = members.find(m =>
+    m.email.toLowerCase() === email.toLowerCase()
+  )
+  if (exists) throw new Error('Cet email existe déjà dans votre équipe.')
 
-    const { error } = await supabase
-      .from('tenant_members')
-      .insert({
-        tenant_id: tenant.id,
-        email:     email.toLowerCase().trim(),
-        full_name: fullName.trim(),
-        role,
-        status:    'pending',
-      })
-    if (error) throw error
-    await fetchMembers()
-  }
+  // Appeler l'Edge Function Supabase
+  const { data, error } = await supabase.functions.invoke('create-employee', {
+    body: {
+      email:    email.toLowerCase().trim(),
+      password,
+      fullName: fullName.trim(),
+      role,
+      tenantId: tenant.id,
+    }
+  })
+
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+
+  await fetchMembers()
+}
 
   const updateRole = async (id, role) => {
     await supabase
@@ -491,14 +549,15 @@ export default function UsersPage() {
         </div>
       )}
 
-      {modal && (
-        <InviteModal
-          tenant={tenant}
-          membersCount={usersUsed}
-          onClose={() => setModal(false)}
-          onSave={inviteMember}
-        />
-      )}
+      
+{modal && (
+  <CreateMemberModal
+    tenant={tenant}
+    membersCount={usersUsed}
+    onClose={() => setModal(false)}
+    onSave={createMember}           // ← createMember
+  />
+)}
     </div>
   )
 }
