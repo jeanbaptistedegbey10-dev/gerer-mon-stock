@@ -331,56 +331,57 @@ export default function UsersPage() {
 
   // ── Créer un employé ──────────────────────────────────────────────────────
   const createMember = async ({ email, password, fullName, role }) => {
-    // Vérifier doublon
-    const exists = members.find(m =>
-      m.email.toLowerCase() === email.toLowerCase()
-    )
-    if (exists) throw new Error('Cet email existe déjà dans votre équipe.')
+  // Vérifier doublon
+  const exists = members.find(m =>
+    m.email.toLowerCase() === email.toLowerCase()
+  )
+  if (exists) throw new Error('Cet email existe déjà dans votre équipe.')
 
-    // 1. Sauvegarder la session admin
-    const { data: { session: adminSession } } =
-      await supabase.auth.getSession()
-
-    // 2. Créer le compte via signUp (sans email de confirmation)
-    const { data: newUser, error: signUpError } =
-      await supabase.auth.signUp({
-        email:    email.toLowerCase().trim(),
-        password,
-        options: {
-          data:            { full_name: fullName },
-          emailRedirectTo: undefined,
-        },
-      })
-
-    if (signUpError) throw signUpError
-    if (!newUser?.user) throw new Error('Erreur lors de la création du compte.')
-
-    // 3. Créer le membership
-    const { error: memberError } = await supabase
-      .from('tenant_members')
-      .insert({
-        tenant_id: tenant.id,
-        user_id:   newUser.user.id,
-        email:     email.toLowerCase().trim(),
-        full_name: fullName.trim(),
-        role,
-        status:    'active',
-        joined_at: new Date().toISOString(),
-      })
-
-    if (memberError) throw memberError
-
-    // 4. Restaurer la session admin
-    if (adminSession) {
-      await supabase.auth.setSession({
-        access_token:  adminSession.access_token,
-        refresh_token: adminSession.refresh_token,
-      })
+  // 1. Créer un client Supabase temporaire — ne touche PAS à la session admin
+  const { createClient } = await import('@supabase/supabase-js')
+  const tempClient = createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY,
+    {
+      auth: {
+        persistSession:   false,   // ← ne sauvegarde pas la session
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      }
     }
+  )
 
-    await fetchMembers()
-    showToast(`Compte de "${fullName}" créé avec succès !`)
-  }
+  // 2. Créer le compte via le client temporaire
+  const { data: newUser, error: signUpError } =
+    await tempClient.auth.signUp({
+      email:    email.toLowerCase().trim(),
+      password,
+      options: {
+        data: { full_name: fullName },
+      },
+    })
+
+  if (signUpError) throw signUpError
+  if (!newUser?.user) throw new Error('Erreur lors de la création du compte.')
+
+  // 3. Créer le membership avec le client ADMIN (session courante)
+  const { error: memberError } = await supabase
+    .from('tenant_members')
+    .insert({
+      tenant_id: tenant.id,
+      user_id:   newUser.user.id,
+      email:     email.toLowerCase().trim(),
+      full_name: fullName.trim(),
+      role,
+      status:    'active',
+      joined_at: new Date().toISOString(),
+    })
+
+  if (memberError) throw memberError
+
+  await fetchMembers()
+  showToast(`Compte de "${fullName}" créé avec succès !`)
+}
 
   // ── Changer le rôle ───────────────────────────────────────────────────────
   const updateRole = async (id, role) => {
