@@ -20,6 +20,7 @@ import Settings        from './pages/Settings'
 function ProtectedRoute({ children }) {
   const { user, tenant, myRole, loading } = useStore()
 
+  // Spinner pendant le chargement
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
@@ -37,13 +38,33 @@ function ProtectedRoute({ children }) {
     </div>
   )
 
+  // Pas connecté → login
   if (!user) return <Navigate to="/login" replace />
 
-  // Rediriger vers onboarding seulement si
-  // le chargement est terminé ET pas de tenant ET pas de rôle
-  if (!loading && user && !tenant && myRole === null) {
+  // Connecté mais pas de tenant après chargement complet → onboarding
+  // myRole === null signifie que loadTenantContext a terminé sans résultat
+  if (!loading && !tenant && myRole === null) {
     return <Navigate to="/onboarding" replace />
   }
+
+  // Tenant en cours de chargement (tenant null mais myRole pas encore défini)
+  // → on attend, ne pas rediriger
+  if (!tenant) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="w-10 h-10 rounded-xl bg-primary flex items-center
+                        justify-center mx-auto mb-3 animate-pulse">
+          <svg className="w-5 h-5 text-white" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round"
+              strokeWidth={2}
+              d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+          </svg>
+        </div>
+        <p className="text-sm text-gray-400">Chargement de votre espace...</p>
+      </div>
+    </div>
+  )
 
   return children
 }

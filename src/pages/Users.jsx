@@ -330,54 +330,57 @@ export default function UsersPage() {
   useEffect(() => { fetchMembers() }, [tenant])
 
   // ── Créer un employé ──────────────────────────────────────────────────────
-  const createMember = async ({ email, password, fullName, role }) => {
-  // Vérifier doublon
+ const createMember = async ({ email, password, fullName, role }) => {
   const exists = members.find(m =>
     m.email.toLowerCase() === email.toLowerCase()
   )
   if (exists) throw new Error('Cet email existe déjà dans votre équipe.')
 
-  // 1. Créer un client Supabase temporaire — ne touche PAS à la session admin
   const { createClient } = await import('@supabase/supabase-js')
   const tempClient = createClient(
     import.meta.env.VITE_SUPABASE_URL,
     import.meta.env.VITE_SUPABASE_ANON_KEY,
     {
       auth: {
-        persistSession:   false,   // ← ne sauvegarde pas la session
-        autoRefreshToken: false,
+        persistSession:     false,
+        autoRefreshToken:   false,
         detectSessionInUrl: false,
+        storageKey:         `temp-${Date.now()}`, // clé unique à chaque fois
       }
     }
   )
 
-  // 2. Créer le compte via le client temporaire
-  const { data: newUser, error: signUpError } =
-    await tempClient.auth.signUp({
-      email:    email.toLowerCase().trim(),
-      password,
-      options: {
-        data: { full_name: fullName },
-      },
-    })
+  try {
+    const { data: newUser, error: signUpError } =
+      await tempClient.auth.signUp({
+        email:    email.toLowerCase().trim(),
+        password,
+        options: {
+          data:            { full_name: fullName },
+          emailRedirectTo: undefined,
+        },
+      })
 
-  if (signUpError) throw signUpError
-  if (!newUser?.user) throw new Error('Erreur lors de la création du compte.')
+    if (signUpError) throw signUpError
+    if (!newUser?.user?.id) throw new Error('Compte non créé. Réessayez.')
 
-  // 3. Créer le membership avec le client ADMIN (session courante)
-  const { error: memberError } = await supabase
-    .from('tenant_members')
-    .insert({
-      tenant_id: tenant.id,
-      user_id:   newUser.user.id,
-      email:     email.toLowerCase().trim(),
-      full_name: fullName.trim(),
-      role,
-      status:    'active',
-      joined_at: new Date().toISOString(),
-    })
+    const { error: memberError } = await supabase
+      .from('tenant_members')
+      .insert({
+        tenant_id: tenant.id,
+        user_id:   newUser.user.id,
+        email:     email.toLowerCase().trim(),
+        full_name: fullName.trim(),
+        role,
+        status:    'active',
+        joined_at: new Date().toISOString(),
+      })
 
-  if (memberError) throw memberError
+    if (memberError) throw memberError
+
+  } finally {
+    await tempClient.auth.signOut()
+  }
 
   await fetchMembers()
   showToast(`Compte de "${fullName}" créé avec succès !`)

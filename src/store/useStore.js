@@ -40,84 +40,85 @@ export const useStore = create((set, get) => ({
   },
 
   loadTenantContext: async (user) => {
-  try {
-    // 1. Super admin ?
-    const { data: sa } = await supabase
-      .from('super_admins')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (sa) {
-      set({ isSuperAdmin: true, myRole: 'superadmin' })
-      return
-    }
-
-    // 2. Chercher membership actif (couvre admin ET employés)
-    const { data: memberships, error } = await supabase
-      .from('tenant_members')
-      .select(`
-        id, role, status, tenant_id,
-        tenants (
-          id, name, owner_id, plan,
-          max_users, max_products, active
-        )
-      `)
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-
-    if (!error && memberships && memberships.length > 0) {
-      const m = memberships[0]
-      if (m.tenants) {
-        set({ tenant: m.tenants, myRole: m.role })
-        return
-      }
-    }
-
-    // 3. Chercher si owner direct d'un tenant
-    // (cas où l'admin n'a pas de membership créé)
-    const { data: ownedTenants } = await supabase
-      .from('tenants')
-      .select('*')
-      .eq('owner_id', user.id)
-
-    if (ownedTenants && ownedTenants.length > 0) {
-      set({ tenant: ownedTenants[0], myRole: 'admin' })
-
-      // Créer automatiquement le membership s'il manque
-      const { data: existing } = await supabase
-        .from('tenant_members')
-        .select('id')
+    try {
+      // ── 1. Super admin ? ─────────────────────────────────────────────────
+      const { data: sa } = await supabase
+        .from('super_admins')
+        .select('user_id')
         .eq('user_id', user.id)
-        .eq('tenant_id', ownedTenants[0].id)
         .maybeSingle()
 
-      if (!existing) {
-        await supabase.from('tenant_members').insert({
-          tenant_id: ownedTenants[0].id,
-          user_id:   user.id,
-          email:     user.email,
-          full_name: user.user_metadata?.full_name || '',
-          role:      'admin',
-          status:    'active',
-          joined_at: new Date().toISOString(),
-        })
+      if (sa) {
+        set({ isSuperAdmin: true, myRole: 'superadmin' })
+        return
       }
-      return
+
+      // ── 2. Chercher membership actif — query SÉPARÉE pour le tenant ──────
+      const { data: membership } = await supabase
+        .from('tenant_members')
+        .select('id, role, status, tenant_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      if (membership?.tenant_id) {
+        // Query séparée pour récupérer le tenant
+        const { data: tenantData } = await supabase
+          .from('tenants')
+          .select('*')
+          .eq('id', membership.tenant_id)
+          .maybeSingle()
+
+        if (tenantData) {
+          set({ tenant: tenantData, myRole: membership.role })
+          return
+        }
+      }
+
+      // ── 3. Chercher si owner d'un tenant ─────────────────────────────────
+      const { data: ownedTenant } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+
+      if (ownedTenant) {
+        set({ tenant: ownedTenant, myRole: 'admin' })
+
+        // Créer le membership s'il manque
+        const { data: existing } = await supabase
+          .from('tenant_members')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('tenant_id', ownedTenant.id)
+          .maybeSingle()
+
+        if (!existing) {
+          await supabase.from('tenant_members').insert({
+            tenant_id: ownedTenant.id,
+            user_id:   user.id,
+            email:     user.email,
+            full_name: user.user_metadata?.full_name || '',
+            role:      'admin',
+            status:    'active',
+            joined_at: new Date().toISOString(),
+          })
+        }
+        return
+      }
+
+      // ── 4. Aucun tenant trouvé ────────────────────────────────────────────
+      set({ tenant: null, myRole: null })
+
+    } catch (err) {
+      console.error('loadTenantContext error:', err)
+      set({ tenant: null, myRole: null })
     }
-
-    // 4. Aucun tenant → onboarding
-    set({ tenant: null, myRole: null })
-
-  } catch (err) {
-    console.error('loadTenantContext error:', err)
-    set({ tenant: null, myRole: null })
-  }
-},
+  },
 
   signIn: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
-      email, password
+      email, password,
     })
     if (error) throw error
     set({ user: data.user })
