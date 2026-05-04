@@ -7,7 +7,7 @@ export const useStore = create((set, get) => ({
   myRole:       null,
   isSuperAdmin: false,
   loading:      true,
-  tenantLoaded: false,  // ← nouveau flag
+  tenantLoaded: false,
 
   init: async () => {
     try {
@@ -41,87 +41,51 @@ export const useStore = create((set, get) => ({
   },
 
   loadTenantContext: async (user) => {
-  try {
-    // 1. Super admin ?
-    const { data: sa } = await supabase
-      .from('super_admins')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (sa) {
-      set({ isSuperAdmin: true, myRole: 'superadmin', tenantLoaded: true })
-      return
-    }
-
-    // 2. Membership actif — on récupère TOUTES les colonnes
-    const { data: membership, error: memberErr } = await supabase
-      .from('tenant_members')
-      .select('id, role, status, tenant_id')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .maybeSingle()
-
-    console.log('membership:', membership, 'error:', memberErr)
-
-    if (membership?.tenant_id) {
-      const { data: tenantData, error: tenantErr } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('id', membership.tenant_id)
+    try {
+      // 1. Vérifier super admin
+      const { data: sa } = await supabase
+        .from('super_admins')
+        .select('user_id')
+        .eq('user_id', user.id)
         .maybeSingle()
 
-      console.log('tenantData:', tenantData, 'error:', tenantErr)
-
-      if (tenantData) {
-        set({ tenant: tenantData, myRole: membership.role, tenantLoaded: true })
+      if (sa) {
+        set({
+          isSuperAdmin: true,
+          myRole:       'superadmin',
+          tenantLoaded: true,
+        })
         return
       }
-    }
 
-    // 3. Owner direct ?
-    const { data: ownedTenant, error: ownedErr } = await supabase
-      .from('tenants')
-      .select('*')
-      .eq('owner_id', user.id)
-      .maybeSingle()
+      // 2. Appeler la fonction SQL sécurisée — bypass RLS
+      const { data, error } = await supabase
+        .rpc('get_my_tenant_context')
 
-    console.log('ownedTenant:', ownedTenant, 'error:', ownedErr)
+      console.log('tenant context:', data, error)
 
-    if (ownedTenant) {
-      set({ tenant: ownedTenant, myRole: 'admin', tenantLoaded: true })
+      if (!error && data?.found) {
+        const tenant = typeof data.tenant === 'string'
+          ? JSON.parse(data.tenant)
+          : data.tenant
 
-      // Créer membership manquant
-      const { data: existing } = await supabase
-        .from('tenant_members')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('tenant_id', ownedTenant.id)
-        .maybeSingle()
-
-      if (!existing) {
-        await supabase.from('tenant_members').insert({
-          tenant_id: ownedTenant.id,
-          user_id:   user.id,
-          email:     user.email,
-          full_name: user.user_metadata?.full_name || '',
-          role:      'admin',
-          status:    'active',
-          joined_at: new Date().toISOString(),
+        set({
+          tenant:       tenant,
+          myRole:       data.role,
+          tenantLoaded: true,
         })
+        return
       }
-      return
+
+      // 3. Aucun tenant trouvé
+      console.log('No tenant found for:', user.email)
+      set({ tenant: null, myRole: null, tenantLoaded: true })
+
+    } catch (err) {
+      console.error('loadTenantContext error:', err)
+      set({ tenant: null, myRole: null, tenantLoaded: true })
     }
-
-    // 4. Vraiment aucun tenant
-    console.log('NO TENANT FOUND for user:', user.id, user.email)
-    set({ tenant: null, myRole: null, tenantLoaded: true })
-
-  } catch (err) {
-    console.error('loadTenantContext error:', err)
-    set({ tenant: null, myRole: null, tenantLoaded: true })
-  }
-},
+  },
 
   signIn: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
