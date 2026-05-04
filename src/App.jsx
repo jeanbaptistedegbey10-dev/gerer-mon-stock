@@ -17,11 +17,9 @@ import Reports         from './pages/Reports'
 import UsersPage       from './pages/Users'
 import Settings        from './pages/Settings'
 
-function ProtectedRoute({ children }) {
-  const { user, tenant, myRole, loading } = useStore()
-
-  // Spinner pendant le chargement
-  if (loading) return (
+// ── Spinner réutilisable ──────────────────────────────────────────────────────
+function Spinner({ message = 'Chargement...' }) {
+  return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <div className="w-10 h-10 rounded-xl bg-primary flex items-center
@@ -33,42 +31,34 @@ function ProtectedRoute({ children }) {
               d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
           </svg>
         </div>
-        <p className="text-sm text-gray-400">Chargement...</p>
+        <p className="text-sm text-gray-400">{message}</p>
       </div>
     </div>
   )
+}
 
-  // Pas connecté → login
+// ── ProtectedRoute ────────────────────────────────────────────────────────────
+function ProtectedRoute({ children }) {
+  const { user, tenant, loading, tenantLoaded } = useStore()
+
+  // 1. Chargement initial de l'auth
+  if (loading) return <Spinner message="Chargement..." />
+
+  // 2. Pas connecté
   if (!user) return <Navigate to="/login" replace />
 
-  // Connecté mais pas de tenant après chargement complet → onboarding
-  // myRole === null signifie que loadTenantContext a terminé sans résultat
-  if (!loading && !tenant && myRole === null) {
+  // 3. Connecté mais tenant pas encore chargé → attendre
+  if (!tenantLoaded) return <Spinner message="Chargement de votre espace..." />
+
+  // 4. Tenant chargé et vide → onboarding
+  if (tenantLoaded && !tenant) {
     return <Navigate to="/onboarding" replace />
   }
-
-  // Tenant en cours de chargement (tenant null mais myRole pas encore défini)
-  // → on attend, ne pas rediriger
-  if (!tenant) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <div className="w-10 h-10 rounded-xl bg-primary flex items-center
-                        justify-center mx-auto mb-3 animate-pulse">
-          <svg className="w-5 h-5 text-white" fill="none"
-            viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round"
-              strokeWidth={2}
-              d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
-          </svg>
-        </div>
-        <p className="text-sm text-gray-400">Chargement de votre espace...</p>
-      </div>
-    </div>
-  )
 
   return children
 }
 
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const init = useStore(s => s.init)
   useEffect(() => { init() }, [init])
@@ -76,9 +66,9 @@ export default function App() {
   return (
     <Routes>
       {/* Publiques */}
-      <Route path="/login"       element={<Login />} />
-      <Route path="/register"    element={<Register />} />
-      <Route path="/onboarding"  element={<Onboarding />} />
+      <Route path="/login"      element={<Login />} />
+      <Route path="/register"   element={<Register />} />
+      <Route path="/onboarding" element={<Onboarding />} />
 
       {/* Protégées */}
       <Route path="/" element={

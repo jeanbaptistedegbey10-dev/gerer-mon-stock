@@ -5,69 +5,29 @@ import { supabase }     from '../lib/supabase'
 import { Package, Building2, ArrowRight } from 'lucide-react'
 
 export default function Onboarding() {
-  const navigate              = useNavigate()
-  const { user, tenant, loadTenantContext } = useStore()
+  const navigate = useNavigate()
+  const { user, tenant, tenantLoaded, loadTenantContext } = useStore()
+
   const [companyName, setCompanyName] = useState(
     localStorage.getItem('pending_company') || ''
   )
-  const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [error,   setError]   = useState('')
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState('')
 
-  // Si l'user a déjà un tenant → rediriger vers dashboard
+  // Si l'user a déjà un tenant chargé → dashboard
   useEffect(() => {
-    const check = async () => {
-      if (!user) { setChecking(false); return }
-
-      // Re-tenter de charger le contexte
-      await loadTenantContext(user)
-
-      // Vérifier directement en base
-      const { data: membership } = await supabase
-        .from('tenant_members')
-        .select('tenant_id, role')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .maybeSingle()
-
-      if (membership) {
-        navigate('/dashboard', { replace: true })
-        return
-      }
-
-      const { data: owned } = await supabase
-        .from('tenants')
-        .select('id')
-        .eq('owner_id', user.id)
-        .maybeSingle()
-
-      if (owned) {
-        navigate('/dashboard', { replace: true })
-        return
-      }
-
-      setChecking(false)
+    if (tenantLoaded && tenant) {
+      navigate('/dashboard', { replace: true })
     }
-    check()
-  }, [user])
-
-  if (checking) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-10 h-10 rounded-xl bg-primary flex items-center
-                        justify-center mx-auto mb-3 animate-pulse">
-          <Package size={20} className="text-white" />
-        </div>
-        <p className="text-sm text-gray-400">Vérification...</p>
-      </div>
-    </div>
-  )
+  }, [tenant, tenantLoaded])
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    if (!companyName.trim()) return setError('Indiquez le nom de votre entreprise.')
+    if (!companyName.trim())
+      return setError('Indiquez le nom de votre entreprise.')
     setError('')
     setLoading(true)
+
     try {
       // Créer le tenant
       const { data: newTenant, error: tenantError } = await supabase
@@ -101,22 +61,23 @@ export default function Onboarding() {
 
       localStorage.removeItem('pending_company')
 
-      // Recharger le contexte
+      // Recharger le contexte → déclenche useEffect → navigate dashboard
       await loadTenantContext(user)
-      navigate('/dashboard', { replace: true })
+
     } catch (err) {
       setError(err.message)
-    } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center
+                    justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center
-                          justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
+                          justify-center mx-auto mb-4
+                          shadow-lg shadow-primary/20">
             <Package size={30} className="text-white" />
           </div>
           <h1 className="text-2xl font-heading font-semibold text-gray-900">
@@ -138,7 +99,8 @@ export default function Onboarding() {
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
               <label className="label flex items-center gap-1">
-                <Building2 size={11} /> Nom de votre entreprise *
+                <Building2 size={11} />
+                Nom de votre entreprise *
               </label>
               <input
                 className="input"

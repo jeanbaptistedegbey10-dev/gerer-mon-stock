@@ -7,11 +7,7 @@ export const useStore = create((set, get) => ({
   myRole:       null,
   isSuperAdmin: false,
   loading:      true,
-
-  setUser:    (user)    => set({ user }),
-  setTenant:  (tenant)  => set({ tenant }),
-  setMyRole:  (myRole)  => set({ myRole }),
-  setLoading: (loading) => set({ loading }),
+  tenantLoaded: false,  // ← nouveau flag
 
   init: async () => {
     try {
@@ -30,18 +26,23 @@ export const useStore = create((set, get) => ({
         if (u) {
           await get().loadTenantContext(u)
         } else {
-          set({ tenant: null, myRole: null, isSuperAdmin: false })
+          set({
+            tenant:       null,
+            myRole:       null,
+            isSuperAdmin: false,
+            tenantLoaded: false,
+          })
         }
       })
     } catch (err) {
       console.error('init error:', err)
-      set({ loading: false })
+      set({ loading: false, tenantLoaded: true })
     }
   },
 
   loadTenantContext: async (user) => {
     try {
-      // ── 1. Super admin ? ─────────────────────────────────────────────────
+      // 1. Super admin ?
       const { data: sa } = await supabase
         .from('super_admins')
         .select('user_id')
@@ -49,11 +50,15 @@ export const useStore = create((set, get) => ({
         .maybeSingle()
 
       if (sa) {
-        set({ isSuperAdmin: true, myRole: 'superadmin' })
+        set({
+          isSuperAdmin: true,
+          myRole:       'superadmin',
+          tenantLoaded: true,
+        })
         return
       }
 
-      // ── 2. Chercher membership actif — query SÉPARÉE pour le tenant ──────
+      // 2. Membership actif → query séparée
       const { data: membership } = await supabase
         .from('tenant_members')
         .select('id, role, status, tenant_id')
@@ -62,7 +67,6 @@ export const useStore = create((set, get) => ({
         .maybeSingle()
 
       if (membership?.tenant_id) {
-        // Query séparée pour récupérer le tenant
         const { data: tenantData } = await supabase
           .from('tenants')
           .select('*')
@@ -70,12 +74,16 @@ export const useStore = create((set, get) => ({
           .maybeSingle()
 
         if (tenantData) {
-          set({ tenant: tenantData, myRole: membership.role })
+          set({
+            tenant:       tenantData,
+            myRole:       membership.role,
+            tenantLoaded: true,
+          })
           return
         }
       }
 
-      // ── 3. Chercher si owner d'un tenant ─────────────────────────────────
+      // 3. Owner direct ?
       const { data: ownedTenant } = await supabase
         .from('tenants')
         .select('*')
@@ -83,9 +91,13 @@ export const useStore = create((set, get) => ({
         .maybeSingle()
 
       if (ownedTenant) {
-        set({ tenant: ownedTenant, myRole: 'admin' })
+        set({
+          tenant:       ownedTenant,
+          myRole:       'admin',
+          tenantLoaded: true,
+        })
 
-        // Créer le membership s'il manque
+        // Créer membership manquant
         const { data: existing } = await supabase
           .from('tenant_members')
           .select('id')
@@ -107,12 +119,12 @@ export const useStore = create((set, get) => ({
         return
       }
 
-      // ── 4. Aucun tenant trouvé ────────────────────────────────────────────
-      set({ tenant: null, myRole: null })
+      // 4. Vraiment aucun tenant
+      set({ tenant: null, myRole: null, tenantLoaded: true })
 
     } catch (err) {
       console.error('loadTenantContext error:', err)
-      set({ tenant: null, myRole: null })
+      set({ tenant: null, myRole: null, tenantLoaded: true })
     }
   },
 
@@ -121,7 +133,7 @@ export const useStore = create((set, get) => ({
       email, password,
     })
     if (error) throw error
-    set({ user: data.user })
+    set({ user: data.user, tenantLoaded: false })
     await get().loadTenantContext(data.user)
     return data
   },
@@ -138,6 +150,12 @@ export const useStore = create((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut()
-    set({ user: null, tenant: null, myRole: null, isSuperAdmin: false })
+    set({
+      user:         null,
+      tenant:       null,
+      myRole:       null,
+      isSuperAdmin: false,
+      tenantLoaded: false,
+    })
   },
 }))
