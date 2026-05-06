@@ -9,47 +9,74 @@ export function useNotifications() {
 
   const fetch = useCallback(async () => {
     if (!tenant) return
-    const { data } = await supabase
-      .from('delivery_notifications')
-      .select('*, deliveries(id, client_name, client_phone)')
-      .eq('tenant_id', tenant.id)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    try {
+      const { data } = await supabase
+        .from('delivery_notifications')
+        .select('*, deliveries(id, client_name, client_phone)')
+        .eq('tenant_id', tenant.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
 
-    const notifs = data || []
-    setNotifications(notifs)
+      const notifs = data || []
+      setNotifications(notifs)
 
-    // Compter les non-lues pour cet user
-    const unread = notifs.filter(n => {
-      const readBy = Array.isArray(n.read_by) ? n.read_by : []
-      return !readBy.includes(user?.id)
-    }).length
-    setUnreadCount(unread)
+      const unread = notifs.filter(n => {
+        const readBy = Array.isArray(n.read_by) ? n.read_by : []
+        return !readBy.includes(user?.id)
+      }).length
+      setUnreadCount(unread)
+    } catch (err) {
+      console.error('fetchNotifications error:', err)
+    }
   }, [tenant, user])
 
   useEffect(() => { fetch() }, [fetch])
 
-  // Realtime — écouter les nouvelles notifications
+  // Realtime — avec gestion d'erreur propre
   useEffect(() => {
     if (!tenant) return
 
-    const channel = supabase
-      .channel(`notifications-${tenant.id}`)
-      .on('postgres_changes', {
-        event:  'INSERT',
-        schema: 'public',
-        table:  'delivery_notifications',
-        filter: `tenant_id=eq.${tenant.id}`,
-      }, (payload) => {
-        setNotifications(prev => [payload.new, ...prev])
-        setUnreadCount(prev => prev + 1)
-      })
-      .subscribe()
+    let channel = null
 
-    return () => { supabase.removeChannel(channel) }
+    try {
+      channel = supabase
+        .channel(`notifs-${tenant.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event:  'INSERT',
+            schema: 'public',
+            table:  'delivery_notifications',
+            filter: `tenant_id=eq.${tenant.id}`,
+          },
+          (payload) => {
+            setNotifications(prev => [payload.new, ...prev])
+            setUnreadCount(prev => prev + 1)
+          }
+        )
+
+      // Vérifier si subscribe réussit avant d'appeler
+      channel.subscribe((status, err) => {
+        if (err) {
+          console.warn('Realtime subscription warning:', err.message)
+          // Pas critique — on désactive silencieusement le realtime
+        }
+      })
+    } catch (err) {
+      console.warn('Realtime non disponible:', err.message)
+    }
+
+    return () => {
+      if (channel) {
+        try {
+          supabase.removeChannel(channel)
+        } catch (e) {
+          // Ignorer
+        }
+      }
+    }
   }, [tenant])
 
-  // Marquer comme lue
   const markAsRead = async (notificationId) => {
     if (!user) return
     const notif = notifications.find(n => n.id === notificationId)
@@ -59,20 +86,23 @@ export function useNotifications() {
     if (readBy.includes(user.id)) return
 
     const newReadBy = [...readBy, user.id]
-    await supabase
-      .from('delivery_notifications')
-      .update({ read_by: newReadBy })
-      .eq('id', notificationId)
+    try {
+      await supabase
+        .from('delivery_notifications')
+        .update({ read_by: newReadBy })
+        .eq('id', notificationId)
 
-    setNotifications(prev =>
-      prev.map(n => n.id === notificationId
-        ? { ...n, read_by: newReadBy } : n
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId
+          ? { ...n, read_by: newReadBy } : n
+        )
       )
-    )
-    setUnreadCount(prev => Math.max(0, prev - 1))
+      setUnreadCount(prev => Math.max(0, prev - 1))
+    } catch (err) {
+      console.error('markAsRead error:', err)
+    }
   }
 
-  // Marquer tout comme lu
   const markAllAsRead = async () => {
     if (!user) return
     const unread = notifications.filter(n => {
@@ -82,7 +112,6 @@ export function useNotifications() {
     for (const n of unread) await markAsRead(n.id)
   }
 
-  // Envoyer une notification (livreur)
   const sendNotification = async ({ deliveryId, type, message }) => {
     if (!user || !tenant) return
     const { error } = await supabase
@@ -98,7 +127,6 @@ export function useNotifications() {
       })
     if (error) throw error
 
-    // Mettre à jour notification_pending sur la livraison
     await supabase
       .from('deliveries')
       .update({
@@ -106,6 +134,9 @@ export function useNotifications() {
         notification_type:    type,
       })
       .eq('id', deliveryId)
+
+    // Rafraîchir manuellement si realtime indisponible
+    await fetch()
   }
 
   return {

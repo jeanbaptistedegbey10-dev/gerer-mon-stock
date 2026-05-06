@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useStats }    from '../hooks/useStats'
 import { useStore }    from '../store/useStore'
+import { usePermissions } from '../hooks/usePermissions'
 import {
   AreaChart, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer
@@ -30,7 +31,7 @@ export default function Dashboard() {
   const navigate    = useNavigate()
   const { user }    = useStore()
   const { data, loading, refresh } = useStats()
-  const { can } = usePermissions()
+  const { can }     = usePermissions()   // ← ajout
 
   const name = user?.user_metadata?.full_name?.split(' ')[0] || 'vous'
 

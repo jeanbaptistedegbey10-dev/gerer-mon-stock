@@ -38,6 +38,15 @@ const NAV_GROUPS = [
   },
 ]
 
+// Wrapper sécurisé pour useNotifications dans Layout
+function SafeNotifications() {
+  try {
+    return useNotifications()
+  } catch {
+    return { unreadCount: 0, notifications: [], markAsRead: () => {}, markAllAsRead: () => {} }
+  }
+}
+
 // ── Panneau notifications ─────────────────────────────────────────────────────
 function NotificationPanel({ onClose }) {
   const { notifications, unreadCount, markAsRead, markAllAsRead } =
@@ -270,7 +279,7 @@ export default function Layout() {
   const [mobileOpen,  setMobileOpen]  = useState(false)
   const [showNotifs,  setShowNotifs]  = useState(false)
   const { can }                       = usePermissions()
-  const { unreadCount }               = useNotifications()
+  const { unreadCount = 0 } = useNotifications() || {}
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
