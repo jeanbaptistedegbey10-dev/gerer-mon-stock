@@ -33,25 +33,22 @@ export function useSales() {
 
   useEffect(() => { fetch() }, [fetch])
 
-  const createSale = async ({
-    cartItems, clientName, clientPhone,
-    status, discount, discountType, total
-  }) => {
-    // 1. Créer la vente
-    const { data: saleData, error: saleError } = await supabase
-      .from('sales')
-      .insert({
-        tenant_id:     tenant.id,            // ← tenant_id
-        user_id:       user.id,
-        client_name:   clientName   || null,
-        client_phone:  clientPhone  || null,
-        total,
-        discount:      discount     || 0,
-        discount_type: discountType || 'amount',
-        status:        status       || 'payé',
-      })
-      .select()
-      .single()
+  const createSale = async ({ cartItems, clientName, clientPhone, status, discount, discountType, total }) => {
+  const { data: saleData, error: saleError } = await supabase
+    .from('sales')
+    .insert({
+      tenant_id:     tenant.id,
+      user_id:       user.id,
+      created_by:    user.id,        // ← ajout
+      client_name:   clientName   || null,
+      client_phone:  clientPhone  || null,
+      total,
+      discount:      discount     || 0,
+      discount_type: discountType || 'amount',
+      status:        status       || 'payé',
+    })
+    .select()
+    .single()
     if (saleError) throw saleError
 
     // 2. Créer les lignes

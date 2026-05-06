@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useNavigate }       from 'react-router-dom'
 import { useSales }          from '../hooks/useSales'
+import { useTeamMembers }    from '../hooks/useTeamMembers'
+import { usePermissions }    from '../hooks/usePermissions'
 import { generateReceipt }   from '../utils/pdf'
 import { Plus, FileText, Search } from 'lucide-react'
 
@@ -14,30 +16,36 @@ const PERIODS = [
 ]
 
 export default function Sales() {
-  const navigate             = useNavigate()
-  const { sales, loading }   = useSales()
-  const [search,  setSearch] = useState('')
-  const [status,  setStatus] = useState('tous')
-  const [period,  setPeriod] = useState(30)
+  const navigate              = useNavigate()
+  const { sales, loading }    = useSales()
+  const { members }           = useTeamMembers()
+  const { can }               = usePermissions()
 
-  // ── Filtrage par période + search + statut ────────────────────────────────
+  const [search,         setSearch]         = useState('')
+  const [status,         setStatus]         = useState('tous')
+  const [period,         setPeriod]         = useState(30)
+  const [employeeFilter, setEmployeeFilter] = useState('tous')
+
+  // ── Filtrage ──────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const since = new Date()
     since.setDate(since.getDate() - period)
     since.setHours(0, 0, 0, 0)
 
     return sales.filter(s => {
-      const matchPeriod = new Date(s.created_at) >= since
-      const matchSearch =
+      const matchPeriod   = new Date(s.created_at) >= since
+      const matchSearch   =
         (s.client_name  || '').toLowerCase().includes(search.toLowerCase()) ||
         (s.client_phone || '').toLowerCase().includes(search.toLowerCase()) ||
         s.id.toLowerCase().includes(search.toLowerCase())
-      const matchStatus = status === 'tous' ? true : s.status === status
-      return matchPeriod && matchSearch && matchStatus
+      const matchStatus   = status === 'tous' ? true : s.status === status
+      const matchEmployee = employeeFilter === 'tous'
+        ? true : s.created_by === employeeFilter
+      return matchPeriod && matchSearch && matchStatus && matchEmployee
     })
-  }, [sales, period, search, status])
+  }, [sales, period, search, status, employeeFilter])
 
-  // ── Stats de la période sélectionnée ─────────────────────────────────────
+  // ── Stats période ─────────────────────────────────────────────────────────
   const periodStats = useMemo(() => {
     const totalCA    = filtered.reduce((s, v) => s + (v.total || 0), 0)
     const totalCount = filtered.length
@@ -55,6 +63,12 @@ export default function Sales() {
     s === 'en attente' ? 'pill-orange' :
     'pill-red'
 
+  // Nom de l'employé
+  const getMemberName = (userId) => {
+    const m = members.find(m => m.user_id === userId)
+    return m ? (m.full_name || m.email) : '—'
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
 
@@ -69,30 +83,30 @@ export default function Sales() {
             {PERIODS.find(p => p.days === period)?.label}
           </p>
         </div>
-        <button onClick={() => navigate('/sales/new')} className="btn btn-primary">
-          <Plus size={15} /> Nouvelle vente
-        </button>
+        {/* Bouton — masqué pour comptable */}
+        {can('manage_sales') && (
+          <button onClick={() => navigate('/sales/new')} className="btn btn-primary">
+            <Plus size={15} /> Nouvelle vente
+          </button>
+        )}
       </div>
 
       {/* Filtre période */}
       <div className="flex gap-1.5 flex-wrap mb-4">
         {PERIODS.map(p => (
-          <button
-            key={p.days}
-            onClick={() => setPeriod(p.days)}
+          <button key={p.days} onClick={() => setPeriod(p.days)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium
               transition-all border
               ${period === p.days
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-gray-500 border-gray-200 hover:border-primary/30'
-              }`}
-          >
+              }`}>
             {p.label}
           </button>
         ))}
       </div>
 
-      {/* KPIs de la période */}
+      {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="card p-4">
           <p className="text-xs text-gray-500 mb-1">
@@ -119,13 +133,13 @@ export default function Sales() {
         <div className="card p-4">
           <p className="text-xs text-gray-500 mb-1">En attente</p>
           <p className={`text-2xl font-heading font-semibold
-            ${periodStats.pending > 0 ? 'text-amber-500' : 'text-gray-900'}`}>
+            ${periodStats.pending > 0 ? 'text-amber-500' : 'text-gray-400'}`}>
             {periodStats.pending}
           </p>
         </div>
       </div>
 
-      {/* Search + filtre statut */}
+      {/* Filtres */}
       <div className="flex gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search size={15}
@@ -134,6 +148,8 @@ export default function Sales() {
             placeholder="Client, téléphone, référence..."
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+
+        {/* Filtre statut */}
         <div className="flex gap-2">
           {['tous', 'payé', 'en attente'].map(f => (
             <button key={f} onClick={() => setStatus(f)}
@@ -142,6 +158,20 @@ export default function Sales() {
             </button>
           ))}
         </div>
+
+        {/* Filtre employé */}
+        <select
+          className="input w-auto min-w-40"
+          value={employeeFilter}
+          onChange={e => setEmployeeFilter(e.target.value)}
+        >
+          <option value="tous">Tous les employés</option>
+          {members.map(m => (
+            <option key={m.user_id} value={m.user_id}>
+              {m.full_name || m.email}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
@@ -169,13 +199,13 @@ export default function Sales() {
                   <th className="th">Réduction</th>
                   <th className="th">Total</th>
                   <th className="th">Statut</th>
+                  <th className="th">Employé</th>
                   <th className="th">PDF</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(sale => (
-                  <tr key={sale.id}
-                    className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={sale.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="td font-medium text-primary text-xs">
                       #{sale.id.slice(0, 8).toUpperCase()}
                     </td>
@@ -201,7 +231,7 @@ export default function Sales() {
                     <td className="td">
                       {sale.discount > 0 ? (
                         <span className="text-green-600 text-sm font-medium">
-                          -{sale.discount.toLocaleString('fr-FR')} FCFA
+                          -{(sale.discount).toLocaleString('fr-FR')} FCFA
                         </span>
                       ) : (
                         <span className="text-gray-300">—</span>
@@ -215,6 +245,10 @@ export default function Sales() {
                       <span className={`pill ${statusColor(sale.status)}`}>
                         {sale.status}
                       </span>
+                    </td>
+                    {/* Employé */}
+                    <td className="td text-xs text-gray-500">
+                      {getMemberName(sale.created_by)}
                     </td>
                     <td className="td">
                       <button onClick={() => handlePDF(sale)}
@@ -230,7 +264,7 @@ export default function Sales() {
             </table>
           </div>
 
-          {/* Footer table — total visible */}
+          {/* Footer total */}
           <div className="p-4 border-t border-gray-100 bg-gray-50/50
                           flex items-center justify-between">
             <span className="text-xs text-gray-500">

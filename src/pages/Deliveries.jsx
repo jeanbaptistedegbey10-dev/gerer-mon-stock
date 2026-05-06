@@ -1,14 +1,17 @@
 import { useState, useMemo } from 'react'
-import { useDeliveries } from '../hooks/useDeliveries'
-import { useDrivers }    from '../hooks/useDrivers'
-import { useSales }      from '../hooks/useSales'
+import { useDeliveries }    from '../hooks/useDeliveries'
+import { useDrivers }       from '../hooks/useDrivers'
+import { useSales }         from '../hooks/useSales'
+import { useTeamMembers }   from '../hooks/useTeamMembers'
+import { useNotifications } from '../hooks/useNotifications'
+import { usePermissions }   from '../hooks/usePermissions'
+import { useStore }         from '../store/useStore'
 import {
   Plus, X, Truck, Phone, MapPin,
   User, FileText, Trash2, RefreshCw,
-  Search, ChevronDown
+  Search, ChevronDown, Bell
 } from 'lucide-react'
 
-// ── Config statuts ────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   'en attente': { pill: 'pill-gray',   label: 'En attente' },
   'en cours':   { pill: 'pill-orange', label: 'En cours'   },
@@ -18,7 +21,6 @@ const STATUS_CONFIG = {
 
 const STEPS = ['en attente', 'en cours', 'livré']
 
-// ── Stepper visuel ────────────────────────────────────────────────────────────
 function StatusStepper({ status }) {
   const currentIdx = STEPS.indexOf(status)
   return (
@@ -29,15 +31,13 @@ function StatusStepper({ status }) {
             text-xs font-bold transition-all
             ${i <= currentIdx && status !== 'annulé'
               ? 'bg-primary text-white'
-              : 'bg-gray-100 text-gray-400'
-            }`}>
+              : 'bg-gray-100 text-gray-400'}`}>
             {i < currentIdx && status !== 'annulé' ? '✓' : i + 1}
           </div>
           {i < STEPS.length - 1 && (
             <div className={`w-6 h-0.5 transition-all
               ${i < currentIdx && status !== 'annulé'
-                ? 'bg-primary' : 'bg-gray-200'}`}
-            />
+                ? 'bg-primary' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
@@ -45,31 +45,21 @@ function StatusStepper({ status }) {
   )
 }
 
-// ── Modal Nouvelle livraison ──────────────────────────────────────────────────
+// ── Modal livraison ───────────────────────────────────────────────────────────
 function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
   const { drivers } = useDrivers()
-
   const [form, setForm] = useState({
-    sale_id:        '',
-    client_name:    '',
-    client_phone:   '',
-    client_address: '',
-    driver_id:      '',
-    driver_name:    '',
-    driver_phone:   '',
-    delivery_fee:   '',
-    status:         'en attente',
-    notes:          '',
+    sale_id: '', client_name: '', client_phone: '',
+    client_address: '', driver_id: '', driver_name: '',
+    driver_phone: '', delivery_fee: '', status: 'en attente', notes: '',
   })
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  // Ventes disponibles — exclut celles déjà liées à une livraison
   const availableSales = sales.filter(s => !usedSaleIds.includes(s.id))
 
-  // Sélection vente → pré-remplir client
   const handleSaleChange = (e) => {
     const sale = sales.find(s => s.id === e.target.value)
     if (!sale) return
@@ -81,7 +71,6 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
     }))
   }
 
-  // Sélection livreur → pré-remplir nom + téléphone
   const handleDriverChange = (e) => {
     const driver = drivers.find(d => d.id === e.target.value)
     if (!driver) return
@@ -130,8 +119,6 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm
                     flex items-center justify-center p-4">
       <div className="card w-full max-w-md max-h-[90vh] overflow-y-auto">
-
-        {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h2 className="font-heading font-semibold text-gray-900">
             Nouvelle livraison
@@ -166,12 +153,6 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
                 </option>
               ))}
             </select>
-            {availableSales.length === 0 && sales.length > 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                ⚠ Toutes vos ventes ont déjà une livraison.
-                Vous pouvez créer une livraison sans vente liée.
-              </p>
-            )}
           </div>
 
           {/* Client */}
@@ -203,7 +184,7 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
               <MapPin size={11} /> Adresse de livraison *
             </label>
             <textarea className="input resize-none" rows={2}
-              placeholder="Quartier, rue, point de repère, ville..."
+              placeholder="Quartier, rue, point de repère..."
               value={form.client_address}
               onChange={set('client_address')} required />
           </div>
@@ -212,8 +193,7 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
           <div>
             <label className="label">Frais de livraison (FCFA)</label>
             <input type="number" min="0" className="input"
-              placeholder="0"
-              value={form.delivery_fee}
+              placeholder="0" value={form.delivery_fee}
               onChange={set('delivery_fee')} />
           </div>
 
@@ -225,7 +205,6 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
             {drivers.length === 0 ? (
               <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
                 ⚠ Aucun livreur enregistré.
-                Ajoutez-en dans la page <strong>Livreurs</strong>.
               </p>
             ) : (
               <>
@@ -241,8 +220,7 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
                 </select>
                 {form.driver_name && (
                   <div className="flex items-center gap-2 text-sm text-gray-600
-                                  bg-white border border-gray-200
-                                  rounded-lg px-3 py-2">
+                                  bg-white border border-gray-200 rounded-lg px-3 py-2">
                     <Truck size={14} className="text-primary" />
                     <span className="font-medium">{form.driver_name}</span>
                     <span className="text-gray-400">·</span>
@@ -256,8 +234,7 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
           {/* Statut */}
           <div>
             <label className="label">Statut initial</label>
-            <select className="input" value={form.status}
-              onChange={set('status')}>
+            <select className="input" value={form.status} onChange={set('status')}>
               <option value="en attente">En attente</option>
               <option value="en cours">En cours</option>
             </select>
@@ -267,15 +244,13 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
           <div>
             <label className="label">Notes</label>
             <textarea className="input resize-none" rows={2}
-              placeholder="Instructions spéciales, notes livreur..."
+              placeholder="Instructions spéciales..."
               value={form.notes} onChange={set('notes')} />
           </div>
 
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose}
-              className="btn flex-1 justify-center">
-              Annuler
-            </button>
+              className="btn flex-1 justify-center">Annuler</button>
             <button type="submit" disabled={loading}
               className="btn btn-primary flex-1 justify-center">
               {loading ? 'Création...' : 'Créer la livraison'}
@@ -287,22 +262,33 @@ function DeliveryModal({ sales, usedSaleIds = [], onClose, onSave }) {
   )
 }
 
-// ── Page Livraisons ───────────────────────────────────────────────────────────
+// ── Page principale ───────────────────────────────────────────────────────────
 export default function Deliveries() {
   const {
     deliveries, loading, stats, usedSaleIds,
     createDelivery, updateStatus, deleteDelivery,
   } = useDeliveries()
-  const { sales } = useSales()
 
-  const [modal,        setModal]        = useState(false)
-  const [search,       setSearch]       = useState('')
-  const [statusFilter, setStatusFilter] = useState('tous')
-  const [expanded,     setExpanded]     = useState(null)
+  const { sales }              = useSales()
+  const { members }            = useTeamMembers()
+  const { sendNotification }   = useNotifications()
+  const { can, isRole }        = usePermissions()
+  const { user }               = useStore()
+
+  const [modal,          setModal]          = useState(false)
+  const [search,         setSearch]         = useState('')
+  const [statusFilter,   setStatusFilter]   = useState('tous')
+  const [employeeFilter, setEmployeeFilter] = useState('tous')
+  const [expanded,       setExpanded]       = useState(null)
+
+  // ── Vue livreur — uniquement SES livraisons ───────────────────────────────
+  const baseDeliveries = isRole('livreur')
+    ? deliveries.filter(d => d.driver_id === user?.id)
+    : deliveries
 
   // ── Filtrage ──────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
-    return deliveries.filter(d => {
+    return baseDeliveries.filter(d => {
       const matchSearch =
         (d.client_name    || '').toLowerCase().includes(search.toLowerCase()) ||
         (d.client_address || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -310,13 +296,40 @@ export default function Deliveries() {
         (d.driver_name    || '').toLowerCase().includes(search.toLowerCase())
       const matchStatus =
         statusFilter === 'tous' ? true : d.status === statusFilter
-      return matchSearch && matchStatus
+      const matchEmployee =
+        employeeFilter === 'tous' ? true : d.created_by === employeeFilter
+      return matchSearch && matchStatus && matchEmployee
     })
-  }, [deliveries, search, statusFilter])
+  }, [baseDeliveries, search, statusFilter, employeeFilter])
 
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer cette livraison ?')) return
     await deleteDelivery(id)
+  }
+
+  // ── Notification livreur ──────────────────────────────────────────────────
+  const handleNotify = async (delivery, type) => {
+    try {
+      const msg = type === 'completed'
+        ? `Livraison pour ${delivery.client_name || delivery.client_phone} effectuée`
+        : `Livraison pour ${delivery.client_name || delivery.client_phone} annulée`
+      await sendNotification({
+        deliveryId: delivery.id,
+        type,
+        message:    msg,
+      })
+      alert(type === 'completed'
+        ? '✅ Notification envoyée — Livraison effectuée !'
+        : '❌ Notification envoyée — Livraison annulée !')
+    } catch (err) {
+      alert('Erreur : ' + err.message)
+    }
+  }
+
+  // Nom de l'employé
+  const getMemberName = (userId) => {
+    const m = members.find(m => m.user_id === userId)
+    return m ? (m.full_name || m.email) : null
   }
 
   return (
@@ -326,49 +339,56 @@ export default function Deliveries() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-heading font-semibold text-gray-900">
-            Livraisons
+            {isRole('livreur') ? 'Mes livraisons' : 'Livraisons'}
           </h1>
           <p className="text-sm text-gray-500">
-            Suivi des commandes client
+            {isRole('livreur')
+              ? 'Vos livraisons assignées'
+              : 'Suivi des commandes client'}
           </p>
         </div>
-        <button onClick={() => setModal(true)} className="btn btn-primary">
-          <Plus size={15} /> Nouvelle livraison
-        </button>
+        {/* Bouton — admin, manager, caissier */}
+        {can('manage_deliveries') && !isRole('livreur') && (
+          <button onClick={() => setModal(true)} className="btn btn-primary">
+            <Plus size={15} /> Nouvelle livraison
+          </button>
+        )}
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">En attente</p>
-          <p className={`text-2xl font-heading font-semibold
-            ${stats.enAttente > 0 ? 'text-gray-700' : 'text-gray-400'}`}>
-            {stats.enAttente}
-          </p>
+      {/* KPIs — masqués pour livreur */}
+      {!isRole('livreur') && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="card p-4">
+            <p className="text-xs text-gray-500 mb-1">En attente</p>
+            <p className={`text-2xl font-heading font-semibold
+              ${stats.enAttente > 0 ? 'text-gray-700' : 'text-gray-400'}`}>
+              {stats.enAttente}
+            </p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs text-gray-500 mb-1">En cours</p>
+            <p className={`text-2xl font-heading font-semibold
+              ${stats.enCours > 0 ? 'text-amber-500' : 'text-gray-400'}`}>
+              {stats.enCours}
+            </p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs text-gray-500 mb-1">Livrées</p>
+            <p className="text-2xl font-heading font-semibold text-green-600">
+              {stats.livrees}
+            </p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs text-gray-500 mb-1">Frais collectés</p>
+            <p className="text-lg font-heading font-semibold text-primary">
+              {stats.totalFrais.toLocaleString('fr-FR')}
+              <span className="text-xs text-gray-400 ml-1">FCFA</span>
+            </p>
+          </div>
         </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">En cours</p>
-          <p className={`text-2xl font-heading font-semibold
-            ${stats.enCours > 0 ? 'text-amber-500' : 'text-gray-400'}`}>
-            {stats.enCours}
-          </p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Livrées</p>
-          <p className="text-2xl font-heading font-semibold text-green-600">
-            {stats.livrees}
-          </p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Frais collectés</p>
-          <p className="text-lg font-heading font-semibold text-primary">
-            {stats.totalFrais.toLocaleString('fr-FR')}
-            <span className="text-xs text-gray-400 ml-1">FCFA</span>
-          </p>
-        </div>
-      </div>
+      )}
 
-      {/* Search + filtres */}
+      {/* Filtres */}
       <div className="flex gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search size={15}
@@ -377,6 +397,8 @@ export default function Deliveries() {
             placeholder="Client, adresse, livreur..."
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+
+        {/* Filtre statut */}
         <div className="flex gap-2 flex-wrap">
           {['tous', 'en attente', 'en cours', 'livré', 'annulé'].map(f => (
             <button key={f} onClick={() => setStatusFilter(f)}
@@ -386,9 +408,25 @@ export default function Deliveries() {
             </button>
           ))}
         </div>
+
+        {/* Filtre employé — admin/manager seulement */}
+        {!isRole('livreur') && !isRole('caissier') && (
+          <select
+            className="input w-auto min-w-40"
+            value={employeeFilter}
+            onChange={e => setEmployeeFilter(e.target.value)}
+          >
+            <option value="tous">Tous les employés</option>
+            {members.map(m => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.full_name || m.email}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {/* Liste livraisons */}
+      {/* Liste */}
       {loading ? (
         <div className="card p-12 text-center">
           <RefreshCw size={22} className="text-gray-300 mx-auto mb-3 animate-spin" />
@@ -398,12 +436,16 @@ export default function Deliveries() {
         <div className="card p-12 text-center">
           <Truck size={32} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 text-sm mb-4">
-            Aucune livraison trouvée.
+            {isRole('livreur')
+              ? 'Aucune livraison vous est assignée.'
+              : 'Aucune livraison trouvée.'}
           </p>
-          <button onClick={() => setModal(true)}
-            className="btn btn-primary mx-auto">
-            <Plus size={15} /> Créer une livraison
-          </button>
+          {can('manage_deliveries') && !isRole('livreur') && (
+            <button onClick={() => setModal(true)}
+              className="btn btn-primary mx-auto">
+              <Plus size={15} /> Créer une livraison
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -411,18 +453,28 @@ export default function Deliveries() {
             const isOpen = expanded === d.id
             const cfg    = STATUS_CONFIG[d.status] || STATUS_CONFIG['en attente']
             const items  = d.sales?.sale_items || []
+            const createdByName = getMemberName(d.created_by)
 
             return (
               <div key={d.id} className="card overflow-hidden">
 
-                {/* Ligne principale — cliquable */}
+                {/* Ligne principale */}
                 <div
-                  onClick={() =>
-                    setExpanded(prev => prev === d.id ? null : d.id)
-                  }
+                  onClick={() => setExpanded(prev => prev === d.id ? null : d.id)}
                   className="p-4 flex items-center gap-3 cursor-pointer
                              hover:bg-gray-50/50 transition-colors"
                 >
+                  {/* Voyant notification clignotant */}
+                  {d.notification_pending && !isRole('livreur') && (
+                    <span className="relative flex h-3 w-3 flex-shrink-0">
+                      <span className="animate-ping absolute inline-flex
+                                       h-full w-full rounded-full bg-green-400
+                                       opacity-75"></span>
+                      <span className="relative inline-flex rounded-full
+                                       h-3 w-3 bg-green-500"></span>
+                    </span>
+                  )}
+
                   {/* Icône statut */}
                   <div className={`w-10 h-10 rounded-xl flex items-center
                     justify-center flex-shrink-0
@@ -438,15 +490,22 @@ export default function Deliveries() {
                     } />
                   </div>
 
-                  {/* Infos principales */}
+                  {/* Infos */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-gray-900 text-sm">
                         {d.client_name || d.client_phone}
                       </p>
-                      <span className={`pill ${cfg.pill}`}>
-                        {cfg.label}
-                      </span>
+                      <span className={`pill ${cfg.pill}`}>{cfg.label}</span>
+                      {d.notification_pending && !isRole('livreur') && (
+                        <span className={`pill text-xs flex items-center gap-1
+                          ${d.notification_type === 'completed'
+                            ? 'pill-green' : 'pill-red'}`}>
+                          <Bell size={9} />
+                          {d.notification_type === 'completed'
+                            ? 'Effectuée' : 'Annulée'}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                       <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -458,6 +517,12 @@ export default function Deliveries() {
                         {(d.client_address || '').length > 40 ? '...' : ''}
                       </span>
                     </div>
+                    {/* Créé par */}
+                    {createdByName && !isRole('livreur') && (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Par : {createdByName}
+                      </p>
+                    )}
                   </div>
 
                   {/* Frais + date */}
@@ -479,46 +544,87 @@ export default function Deliveries() {
                       ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
 
-                {/* Détails expandables */}
+                {/* Détails */}
                 {isOpen && (
                   <div className="border-t border-gray-100 p-4 space-y-4
                                   bg-gray-50/30">
 
-                    {/* Stepper + changement statut */}
-                    <div className="flex items-center justify-between
-                                    flex-wrap gap-3">
-                      <div>
-                        <p className="text-xs text-gray-500 mb-2">
-                          Progression
-                        </p>
-                        {d.status === 'annulé' ? (
-                          <span className="pill pill-red">Annulée</span>
-                        ) : (
-                          <StatusStepper status={d.status} />
+                    {/* Stepper + changement statut — pas pour livreur */}
+                    {!isRole('livreur') && (
+                      <div className="flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-2">Progression</p>
+                          {d.status === 'annulé' ? (
+                            <span className="pill pill-red">Annulée</span>
+                          ) : (
+                            <StatusStepper status={d.status} />
+                          )}
+                        </div>
+                        {can('manage_deliveries') && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">
+                              Mettre à jour
+                            </p>
+                            <select
+                              value={d.status}
+                              onChange={e => updateStatus(d.id, e.target.value)}
+                              className="input text-sm py-1.5 w-auto"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <option value="en attente">En attente</option>
+                              <option value="en cours">En cours</option>
+                              <option value="livré">Livré ✓</option>
+                              <option value="annulé">Annulé ✗</option>
+                            </select>
+                          </div>
                         )}
                       </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">
-                          Mettre à jour
-                        </p>
-                        <select
-                          value={d.status}
-                          onChange={e => updateStatus(d.id, e.target.value)}
-                          className="input text-sm py-1.5 w-auto"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <option value="en attente">En attente</option>
-                          <option value="en cours">En cours</option>
-                          <option value="livré">Livré ✓</option>
-                          <option value="annulé">Annulé ✗</option>
-                        </select>
-                      </div>
-                    </div>
+                    )}
 
-                    {/* Livreur */}
+                    {/* Boutons livreur — notifier */}
+                    {isRole('livreur') && d.status === 'en cours' && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleNotify(d, 'completed')}
+                          className="btn flex-1 justify-center text-sm
+                                     bg-green-500 text-white border-green-500
+                                     hover:bg-green-600"
+                        >
+                          ✅ Livraison effectuée
+                        </button>
+                        <button
+                          onClick={() => handleNotify(d, 'cancelled')}
+                          className="btn flex-1 justify-center text-sm
+                                     text-red-500 hover:bg-red-50"
+                        >
+                          ❌ Annulée
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Info livreur — visible pour livreur aussi */}
+                    {isRole('livreur') && (
+                      <div className="bg-blue-50 rounded-lg p-3 space-y-1">
+                        <p className="text-xs font-medium text-blue-700">
+                          Détails de votre livraison
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          📍 {d.client_address}
+                        </p>
+                        <p className="text-xs text-blue-600">
+                          📞 {d.client_phone}
+                        </p>
+                        {d.notes && (
+                          <p className="text-xs text-blue-600">
+                            📝 {d.notes}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Livreur assigné */}
                     {d.driver_name && (
-                      <div className="flex items-center gap-2 text-sm
-                                      text-gray-600">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Truck size={13} className="text-primary flex-shrink-0" />
                         <span>Livreur :</span>
                         <span className="font-medium">{d.driver_name}</span>
@@ -527,12 +633,10 @@ export default function Deliveries() {
                       </div>
                     )}
 
-                    {/* Produits livrés */}
+                    {/* Produits */}
                     {items.length > 0 && (
                       <div>
-                        <p className="text-xs text-gray-500 mb-2">
-                          Produits
-                        </p>
+                        <p className="text-xs text-gray-500 mb-2">Produits</p>
                         <div className="flex flex-wrap gap-2">
                           {items.map((item, i) => (
                             <span key={i} className="pill pill-blue">
@@ -545,47 +649,42 @@ export default function Deliveries() {
 
                     {/* Vente liée */}
                     {d.sales && (
-                      <div className="flex items-center gap-2 text-sm
-                                      text-gray-600">
-                        <FileText size={13}
-                          className="text-primary flex-shrink-0" />
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <FileText size={13} className="text-primary flex-shrink-0" />
                         <span>Vente liée :</span>
                         <span className="font-medium text-primary">
                           #{d.sales.id.slice(0, 8).toUpperCase()}
                         </span>
                         <span className="text-gray-400">—</span>
-                        <span>
-                          {(d.sales.total || 0).toLocaleString('fr-FR')} FCFA
-                        </span>
+                        <span>{(d.sales.total || 0).toLocaleString('fr-FR')} FCFA</span>
                       </div>
                     )}
 
                     {/* Notes */}
-                    {d.notes && (
+                    {d.notes && !isRole('livreur') && (
                       <div className="bg-amber-50 border border-amber-100
                                       rounded-lg px-3 py-2">
-                        <p className="text-xs text-amber-700">
-                          📝 {d.notes}
-                        </p>
+                        <p className="text-xs text-amber-700">📝 {d.notes}</p>
                       </div>
                     )}
 
                     {/* Réf + supprimer */}
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs text-gray-400">
-                        #{d.id.slice(0, 8).toUpperCase()}
-                      </span>
-                      <button
-                        onClick={e => {
-                          e.stopPropagation()
-                          handleDelete(d.id)
-                        }}
-                        className="flex items-center gap-1 text-xs text-red-400
-                                   hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 size={12} /> Supprimer
-                      </button>
-                    </div>
+                    {!isRole('livreur') && (
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-xs text-gray-400">
+                          #{d.id.slice(0, 8).toUpperCase()}
+                        </span>
+                        {can('manage_deliveries') && (
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDelete(d.id) }}
+                            className="flex items-center gap-1 text-xs text-red-400
+                                       hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 size={12} /> Supprimer
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -29,13 +29,14 @@ export function usePurchases() {
   useEffect(() => { fetch() }, [fetch])
 
   const createPurchase = async (formData) => {
-    const { data, error } = await supabase
-      .from('purchases')
-      .insert({
-        ...formData,
-        tenant_id: tenant.id,                // ← tenant_id
-        user_id:   user.id,
-      })
+  const { data, error } = await supabase
+    .from('purchases')
+    .insert({
+      ...formData,
+      tenant_id:  tenant.id,
+      user_id:    user.id,
+      created_by: user.id,           // ← ajout
+    })
       .select()
       .single()
     if (error) throw error

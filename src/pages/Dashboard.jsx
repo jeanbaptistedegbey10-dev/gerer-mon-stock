@@ -30,6 +30,7 @@ export default function Dashboard() {
   const navigate    = useNavigate()
   const { user }    = useStore()
   const { data, loading, refresh } = useStats()
+  const { can } = usePermissions()
 
   const name = user?.user_metadata?.full_name?.split(' ')[0] || 'vous'
 
@@ -80,14 +81,18 @@ export default function Dashboard() {
           subColor="text-blue-600"
           accent="bg-primary"
         />
-        <KpiCard
-            label="Bénéfice estimé"
-            value={(kpis?.todayBenef || 0).toLocaleString('fr-FR')}
-            unit="FCFA"
-            sub={`Marge moy. ${kpis?.margeAffichee || 0}%`}   // ← marge réelle
-            subColor="text-green-600"
-            accent="bg-green-500"
-          />
+
+        {can('view_financials') && (
+  <KpiCard
+    label="Bénéfice estimé"
+    value={(kpis?.todayBenef || 0).toLocaleString('fr-FR')}
+    unit="FCFA"
+    sub={`Marge moy. ${kpis?.margeAffichee || 0}%`}
+    subColor="text-green-600"
+    accent="bg-green-500"
+  />
+)}
+        
        <KpiCard
   label="Valeur du stock"
   value={(kpis?.valeurStock || 0).toLocaleString('fr-FR')}
@@ -119,10 +124,11 @@ export default function Dashboard() {
                 <span className="w-3 h-1.5 bg-primary rounded inline-block" />
                 Ventes
               </span>
+                        {can('view_financials') && (
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-1.5 bg-green-500 rounded inline-block" />
-                Bénéfices
+                <span className="w-3 h-1.5 bg-green-500 rounded inline-block"/>Bénéfices
               </span>
+            )}
             </div>
           </div>
           <ResponsiveContainer width="100%" height={200}>
@@ -167,6 +173,15 @@ export default function Dashboard() {
                 stroke="#1E3A8A" strokeWidth={2}
                 fill="url(#gV)"
               />
+                            // Dans le graphique — masquer courbe bénéfices
+              {can('view_financials') && (
+                <Area
+                  type="monotone" dataKey="benefices"
+                  stroke="#10B981" strokeWidth={2}
+                  fill="url(#gB)"
+                />
+              )}
+
               <Area
                 type="monotone" dataKey="benefices"
                 stroke="#10B981" strokeWidth={2}

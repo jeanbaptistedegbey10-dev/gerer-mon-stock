@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useProducts } from '../hooks/useProducts'
+import { usePermissions } from '../hooks/usePermissions'
 import ProductModal from '../components/ProductModal'
 import {
   Plus, Search, Edit2, Trash2,
@@ -9,23 +10,26 @@ import {
 export default function Products() {
   const {
     products, loading, error, stats, suppliers,
-    createProduct, updateProduct, deleteProduct
+    createProduct, updateProduct, deleteProduct,
   } = useProducts()
+
+  const { can } = usePermissions()
 
   const [modal,    setModal]    = useState(null)
   const [search,   setSearch]   = useState('')
   const [supplier, setSupplier] = useState('tous')
+  const [filter,   setFilter]   = useState('tous')
 
-  // ─── Filtrage ──────────────────────────────────────────────────────────────
+  // ── Filtrage ──────────────────────────────────────────────────────────────
   const filtered = products.filter(p => {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       (p.category || '').toLowerCase().includes(search.toLowerCase())
-
     const matchSupplier =
       supplier === 'tous' ? true : p.supplier === supplier
-
-    return matchSearch && matchSupplier
+    const matchFilter =
+      filter === 'tous' ? true : p.quantity <= p.low_stock_threshold
+    return matchSearch && matchSupplier && matchFilter
   })
 
   const handleSave = async (formData) => {
@@ -61,9 +65,12 @@ export default function Products() {
             )}
           </p>
         </div>
-        <button onClick={() => setModal('new')} className="btn btn-primary">
-          <Plus size={15} /> Ajouter produit
-        </button>
+        {/* Bouton visible seulement si peut gérer */}
+        {can('manage_products') && (
+          <button onClick={() => setModal('new')} className="btn btn-primary">
+            <Plus size={15} /> Ajouter produit
+          </button>
+        )}
       </div>
 
       {/* KPIs */}
@@ -79,23 +86,28 @@ export default function Products() {
             {stats.lowStock}
           </p>
         </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Valeur achat</p>
-          <p className="text-lg font-heading font-semibold">
-            {stats.totalValue.toLocaleString('fr-FR')}
-            <span className="text-xs text-gray-400 ml-1">FCFA</span>
-          </p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Valeur vente</p>
-          <p className="text-lg font-heading font-semibold text-green-600">
-            {stats.totalRevenue.toLocaleString('fr-FR')}
-            <span className="text-xs text-gray-400 ml-1">FCFA</span>
-          </p>
-        </div>
+        {/* Valeurs financières — masquées pour vendeur/caissier */}
+        {can('view_financials') && (
+          <>
+            <div className="card p-4">
+              <p className="text-xs text-gray-500 mb-1">Valeur achat</p>
+              <p className="text-lg font-heading font-semibold">
+                {stats.totalValue.toLocaleString('fr-FR')}
+                <span className="text-xs text-gray-400 ml-1">FCFA</span>
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs text-gray-500 mb-1">Valeur vente</p>
+              <p className="text-lg font-heading font-semibold text-green-600">
+                {stats.totalRevenue.toLocaleString('fr-FR')}
+                <span className="text-xs text-gray-400 ml-1">FCFA</span>
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Search + filtre fournisseur */}
+      {/* Filtres */}
       <div className="flex gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search size={15}
@@ -103,8 +115,6 @@ export default function Products() {
           <input className="input pl-9" placeholder="Nom, catégorie..."
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-
-        {/* Filtre fournisseur dynamique */}
         <select
           className="input w-auto min-w-40"
           value={supplier}
@@ -115,6 +125,17 @@ export default function Products() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        <div className="flex gap-2">
+          {['tous', 'low_stock'].map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`btn text-sm ${filter === f ? 'btn-primary' : ''}`}
+            >
+              {f === 'tous' ? 'Tous' : '⚠ Stock faible'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* États */}
@@ -129,7 +150,7 @@ export default function Products() {
         <div className="card p-12 text-center">
           <Package size={32} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 text-sm mb-4">Aucun produit trouvé.</p>
-          {!search && supplier === 'tous' && (
+          {can('manage_products') && !search && supplier === 'tous' && (
             <button onClick={() => setModal('new')}
               className="btn btn-primary mx-auto">
               <Plus size={15} /> Ajouter un produit
@@ -147,12 +168,12 @@ export default function Products() {
                 <tr>
                   <th className="th">Produit</th>
                   <th className="th">Catégorie</th>
-                  <th className="th">Prix achat</th>
+                  {can('view_financials') && <th className="th">Prix achat</th>}
                   <th className="th">Prix vente</th>
-                  <th className="th">Marge</th>
+                  {can('view_financials') && <th className="th">Marge</th>}
                   <th className="th">Stock</th>
                   <th className="th">Fournisseur</th>
-                  <th className="th">Actions</th>
+                  {can('manage_products') && <th className="th">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -161,19 +182,15 @@ export default function Products() {
                   const isLow = p.quantity <= p.low_stock_threshold
 
                   return (
-                    <tr key={p.id}
-                      className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
 
                       {/* Produit + image */}
                       <td className="td">
                         <div className="flex items-center gap-3">
                           {p.image_url ? (
-                            <img
-                              src={p.image_url}
-                              alt={p.name}
+                            <img src={p.image_url} alt={p.name}
                               className="w-10 h-10 rounded-lg object-cover
-                                         border border-gray-100 flex-shrink-0"
-                            />
+                                         border border-gray-100 flex-shrink-0" />
                           ) : (
                             <div className="w-10 h-10 rounded-lg bg-gray-100
                                             flex items-center justify-center flex-shrink-0">
@@ -191,32 +208,41 @@ export default function Products() {
                         </div>
                       </td>
 
+                      {/* Catégorie */}
                       <td className="td">
                         {p.category
                           ? <span className="pill pill-blue">{p.category}</span>
                           : <span className="text-gray-300">—</span>}
                       </td>
 
-                      <td className="td text-gray-600">
-                        {p.purchase_price.toLocaleString('fr-FR')}
-                      </td>
+                      {/* Prix achat — masqué vendeur/caissier */}
+                      {can('view_financials') && (
+                        <td className="td text-gray-600">
+                          {(p.purchase_price || 0).toLocaleString('fr-FR')}
+                        </td>
+                      )}
 
+                      {/* Prix vente */}
                       <td className="td font-medium text-primary">
-                        {p.sale_price.toLocaleString('fr-FR')}
+                        {(p.sale_price || 0).toLocaleString('fr-FR')}
                       </td>
 
-                      <td className="td">
-                        {m !== null && (
-                          <span className={`pill ${
-                            parseFloat(m) > 20  ? 'pill-green'  :
-                            parseFloat(m) > 0   ? 'pill-orange' :
-                            'pill-red'
-                          }`}>
-                            {parseFloat(m) > 0 ? '+' : ''}{m}%
-                          </span>
-                        )}
-                      </td>
+                      {/* Marge — masquée vendeur/caissier */}
+                      {can('view_financials') && (
+                        <td className="td">
+                          {m !== null && (
+                            <span className={`pill ${
+                              parseFloat(m) > 20  ? 'pill-green'  :
+                              parseFloat(m) > 0   ? 'pill-orange' :
+                              'pill-red'
+                            }`}>
+                              {parseFloat(m) > 0 ? '+' : ''}{m}%
+                            </span>
+                          )}
+                        </td>
+                      )}
 
+                      {/* Stock */}
                       <td className="td">
                         <div className="flex items-center gap-1.5">
                           {isLow && (
@@ -234,24 +260,28 @@ export default function Products() {
                         </div>
                       </td>
 
+                      {/* Fournisseur */}
                       <td className="td text-gray-500">
                         {p.supplier || '—'}
                       </td>
 
-                      <td className="td">
-                        <div className="flex gap-1.5">
-                          <button onClick={() => setModal(p)}
-                            className="p-1.5 rounded-lg hover:bg-blue-50
-                                       text-blue-600 transition-colors">
-                            <Edit2 size={13} />
-                          </button>
-                          <button onClick={() => handleDelete(p)}
-                            className="p-1.5 rounded-lg hover:bg-red-50
-                                       text-red-500 transition-colors">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
+                      {/* Actions — masquées vendeur */}
+                      {can('manage_products') && (
+                        <td className="td">
+                          <div className="flex gap-1.5">
+                            <button onClick={() => setModal(p)}
+                              className="p-1.5 rounded-lg hover:bg-blue-50
+                                         text-blue-600 transition-colors">
+                              <Edit2 size={13} />
+                            </button>
+                            <button onClick={() => handleDelete(p)}
+                              className="p-1.5 rounded-lg hover:bg-red-50
+                                         text-red-500 transition-colors">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -261,7 +291,8 @@ export default function Products() {
         </div>
       )}
 
-      {modal && (
+      {/* Modal */}
+      {modal && can('manage_products') && (
         <ProductModal
           product={modal === 'new' ? null : modal}
           onClose={() => setModal(null)}

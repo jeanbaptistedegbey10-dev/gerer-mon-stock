@@ -1,18 +1,26 @@
 import { useState } from 'react'
-import { usePurchases } from '../hooks/usePurchases'
-import { useProducts }  from '../hooks/useProducts'
+import { usePurchases }   from '../hooks/usePurchases'
+import { useProducts }    from '../hooks/useProducts'
+import { useTeamMembers } from '../hooks/useTeamMembers'
+import { usePermissions } from '../hooks/usePermissions'
 import { Plus, X, TrendingDown, Package } from 'lucide-react'
 
+const PERIODS = [
+  { label: '1 jour',     days: 1   },
+  { label: '1 semaine',  days: 7   },
+  { label: '2 semaines', days: 14  },
+  { label: '1 mois',     days: 30  },
+  { label: '3 mois',     days: 90  },
+  { label: '1 an',       days: 365 },
+]
+
+// ── Modal achat ───────────────────────────────────────────────────────────────
 function PurchaseModal({ products, onClose, onSave }) {
   const [form, setForm] = useState({
-    product_id:        '',
-    product_name:      '',
-    supplier:          '',
-    quantity_received: '',
-    transport_cost:    '',
-    customs_cost:      '',
-    status:            'reçu',
-    notes:             '',
+    product_id: '', product_name: '', supplier: '',
+    quantity_received: '', subtotal: '',
+    transport_cost: '', customs_cost: '',
+    status: 'reçu', notes: '',
   })
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
@@ -21,10 +29,8 @@ function PurchaseModal({ products, onClose, onSave }) {
 
   const suppliers = [...new Set(products.map(p => p.supplier).filter(Boolean))]
 
-  // Produit sélectionné
   const selectedProduct = products.find(p => p.id === form.product_id)
 
-  // Quand on sélectionne un produit → pré-remplir fournisseur
   const handleProductChange = (e) => {
     const product = products.find(p => p.id === e.target.value)
     if (!product) return
@@ -36,15 +42,13 @@ function PurchaseModal({ products, onClose, onSave }) {
     }))
   }
 
-  // ── Calculs automatiques ──────────────────────────────────────────────────
-  const qty           = parseInt(form.quantity_received)  || 0
-  const prixAchat     = selectedProduct?.purchase_price   || 0
-  const transport     = parseFloat(form.transport_cost)   || 0
-  const douane        = parseFloat(form.customs_cost)     || 0
-
-  const coutProduits  = prixAchat * qty                   // non modifiable
-  const coutTotal     = coutProduits + transport + douane
-  const coutUnitaire  = qty > 0 ? coutTotal / qty : 0
+  const qty          = parseInt(form.quantity_received)  || 0
+  const prixAchat    = selectedProduct?.purchase_price   || 0
+  const transport    = parseFloat(form.transport_cost)   || 0
+  const douane       = parseFloat(form.customs_cost)     || 0
+  const coutProduits = prixAchat * qty
+  const coutTotal    = coutProduits + transport + douane
+  const coutUnitaire = qty > 0 ? coutTotal / qty : 0
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -54,16 +58,16 @@ function PurchaseModal({ products, onClose, onSave }) {
     setLoading(true)
     try {
       await onSave({
-        product_id:        form.product_id,
-        product_name:      form.product_name,
-        supplier:          form.supplier,
-        quantity_received: qty,
-        subtotal:          coutProduits,   // prix_achat * qté
-        transport_cost:    transport,
-        customs_cost:      douane,
-        cout_unitaire_reel: coutUnitaire,  // coût réel/unité stocké
-        status:            form.status,
-        notes:             form.notes,
+        product_id:         form.product_id,
+        product_name:       form.product_name,
+        supplier:           form.supplier,
+        quantity_received:  qty,
+        subtotal:           coutProduits,
+        transport_cost:     transport,
+        customs_cost:       douane,
+        cout_unitaire_reel: coutUnitaire,
+        status:             form.status,
+        notes:              form.notes,
       })
       onClose()
     } catch (err) {
@@ -94,7 +98,6 @@ function PurchaseModal({ products, onClose, onSave }) {
             </p>
           )}
 
-          {/* Produit */}
           <div>
             <label className="label">Produit *</label>
             <select className="input" value={form.product_id}
@@ -102,13 +105,13 @@ function PurchaseModal({ products, onClose, onSave }) {
               <option value="">-- Sélectionner un produit --</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.name} — Stock : {p.quantity} — Prix achat : {p.purchase_price.toLocaleString('fr-FR')} FCFA
+                  {p.name} {p.category ? `(${p.category})` : ''}
+                  {' — Stock : '}{p.quantity}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Fournisseur */}
           <div>
             <label className="label">Fournisseur *</label>
             <select className="input" value={form.supplier}
@@ -125,7 +128,6 @@ function PurchaseModal({ products, onClose, onSave }) {
             )}
           </div>
 
-          {/* Quantité */}
           <div>
             <label className="label">Quantité reçue *</label>
             <input type="number" className="input" placeholder="0" min="1"
@@ -133,7 +135,7 @@ function PurchaseModal({ products, onClose, onSave }) {
               onChange={set('quantity_received')} required />
           </div>
 
-          {/* Coût produits — lecture seule, calculé auto */}
+          {/* Coût produits — calculé auto */}
           <div>
             <label className="label">
               Coût produits (FCFA)
@@ -145,7 +147,7 @@ function PurchaseModal({ products, onClose, onSave }) {
                             flex items-center justify-between">
               <span>
                 {selectedProduct
-                  ? `${selectedProduct.purchase_price.toLocaleString('fr-FR')} × ${qty || 0}`
+                  ? `${prixAchat.toLocaleString('fr-FR')} × ${qty || 0}`
                   : 'Sélectionnez un produit'}
               </span>
               <span className="font-semibold text-gray-700">
@@ -156,7 +158,6 @@ function PurchaseModal({ products, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Transport + Douane — modifiables */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Transport (FCFA)</label>
@@ -170,7 +171,7 @@ function PurchaseModal({ products, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Récap coût — visible dès qu'un produit + quantité sont sélectionnés */}
+          {/* Récap coût */}
           {selectedProduct && qty > 0 && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-sm text-blue-700">
@@ -205,12 +206,11 @@ function PurchaseModal({ products, onClose, onSave }) {
             </div>
           )}
 
-          {/* Statut */}
           <div>
             <label className="label">Statut</label>
             <select className="input" value={form.status} onChange={set('status')}>
               <option value="reçu">Reçu — stock mis à jour immédiatement</option>
-              <option value="en transit">En transit — stock mis à jour à la réception</option>
+              <option value="en transit">En transit</option>
             </select>
           </div>
 
@@ -235,18 +235,42 @@ function PurchaseModal({ products, onClose, onSave }) {
   )
 }
 
+// ── Page Achats ───────────────────────────────────────────────────────────────
 export default function Purchases() {
-  const { purchases, loading, stats, createPurchase, updateStatus } = usePurchases()
-  const { products } = useProducts()
-  const [modal, setModal] = useState(false)
+  const { purchases, loading, stats, createPurchase, updateStatus } =
+    usePurchases()
+  const { products }  = useProducts()
+  const { members }   = useTeamMembers()
+  const { can }       = usePermissions()
+
+  const [modal,          setModal]          = useState(false)
+  const [period,         setPeriod]         = useState(30)
+  const [employeeFilter, setEmployeeFilter] = useState('tous')
+
+  const since = new Date()
+  since.setDate(since.getDate() - period)
+  since.setHours(0, 0, 0, 0)
+
+  const filtered = purchases.filter(p => {
+    const matchPeriod   = new Date(p.created_at) >= since
+    const matchEmployee = employeeFilter === 'tous'
+      ? true : p.created_by === employeeFilter
+    return matchPeriod && matchEmployee
+  })
 
   const statusColor = s =>
     s === 'reçu'       ? 'pill-green'  :
     s === 'en transit' ? 'pill-orange' :
     'pill-red'
 
+  const getMemberName = (userId) => {
+    const m = members.find(m => m.user_id === userId)
+    return m ? (m.full_name || m.email) : '—'
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-heading font-semibold text-gray-900">
@@ -256,9 +280,12 @@ export default function Purchases() {
             Le stock est mis à jour automatiquement à chaque achat
           </p>
         </div>
-        <button onClick={() => setModal(true)} className="btn btn-primary">
-          <Plus size={15} /> Nouvel achat
-        </button>
+        {/* Bouton — masqué pour comptable */}
+        {can('manage_purchases') && (
+          <button onClick={() => setModal(true)} className="btn btn-primary">
+            <Plus size={15} /> Nouvel achat
+          </button>
+        )}
       </div>
 
       {/* KPIs */}
@@ -270,7 +297,7 @@ export default function Purchases() {
         <div className="card p-4">
           <p className="text-xs text-gray-500 mb-1">En transit</p>
           <p className={`text-2xl font-heading font-semibold
-            ${stats.transit > 0 ? 'text-amber-500' : 'text-gray-900'}`}>
+            ${stats.transit > 0 ? 'text-amber-500' : 'text-gray-400'}`}>
             {stats.transit}
           </p>
         </div>
@@ -283,19 +310,50 @@ export default function Purchases() {
         </div>
       </div>
 
+      {/* Filtres période + employé */}
+      <div className="flex gap-3 mb-4 flex-wrap items-center">
+        <div className="flex gap-1.5 flex-wrap">
+          {PERIODS.map(p => (
+            <button key={p.days} onClick={() => setPeriod(p.days)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium
+                transition-all border
+                ${period === p.days
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-primary/30'
+                }`}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <select
+          className="input w-auto min-w-40"
+          value={employeeFilter}
+          onChange={e => setEmployeeFilter(e.target.value)}
+        >
+          <option value="tous">Tous les employés</option>
+          {members.map(m => (
+            <option key={m.user_id} value={m.user_id}>
+              {m.full_name || m.email}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Table */}
       {loading ? (
         <div className="card p-12 text-center text-sm text-gray-400">
           Chargement...
         </div>
-      ) : purchases.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="card p-12 text-center">
           <Package size={32} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm mb-4">Aucun achat enregistré.</p>
-          <button onClick={() => setModal(true)}
-            className="btn btn-primary mx-auto">
-            <Plus size={15} /> Premier achat
-          </button>
+          <p className="text-gray-500 text-sm mb-4">Aucun achat sur cette période.</p>
+          {can('manage_purchases') && (
+            <button onClick={() => setModal(true)}
+              className="btn btn-primary mx-auto">
+              <Plus size={15} /> Premier achat
+            </button>
+          )}
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -311,11 +369,12 @@ export default function Purchases() {
                   <th className="th">Transport</th>
                   <th className="th">Douane</th>
                   <th className="th">Total</th>
+                  <th className="th">Employé</th>
                   <th className="th">Statut</th>
                 </tr>
               </thead>
               <tbody>
-                {purchases.map(p => (
+                {filtered.map(p => (
                   <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="td font-medium text-primary text-xs">
                       #{p.id.slice(0, 8).toUpperCase()}
@@ -328,9 +387,7 @@ export default function Purchases() {
                       {new Date(p.created_at).toLocaleDateString('fr-FR')}
                     </td>
                     <td className="td">
-                      <span className="pill pill-blue">
-                        +{p.quantity_received}
-                      </span>
+                      <span className="pill pill-blue">+{p.quantity_received}</span>
                     </td>
                     <td className="td text-gray-500">
                       {(p.transport_cost || 0).toLocaleString('fr-FR')}
@@ -342,17 +399,27 @@ export default function Purchases() {
                       {(p.total || 0).toLocaleString('fr-FR')}
                       <span className="text-xs text-gray-400 ml-1">FCFA</span>
                     </td>
+                    {/* Employé */}
+                    <td className="td text-xs text-gray-500">
+                      {getMemberName(p.created_by)}
+                    </td>
                     <td className="td">
-                      <select
-                        value={p.status}
-                        onChange={e => updateStatus(p.id, e.target.value)}
-                        className={`pill cursor-pointer border-0 bg-transparent
-                          font-medium text-xs outline-none ${statusColor(p.status)}`}
-                      >
-                        <option value="en transit">en transit</option>
-                        <option value="reçu">reçu</option>
-                        <option value="annulé">annulé</option>
-                      </select>
+                      {can('manage_purchases') ? (
+                        <select
+                          value={p.status}
+                          onChange={e => updateStatus(p.id, e.target.value)}
+                          className={`pill cursor-pointer border-0 bg-transparent
+                            font-medium text-xs outline-none ${statusColor(p.status)}`}
+                        >
+                          <option value="en transit">en transit</option>
+                          <option value="reçu">reçu</option>
+                          <option value="annulé">annulé</option>
+                        </select>
+                      ) : (
+                        <span className={`pill ${statusColor(p.status)}`}>
+                          {p.status}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
