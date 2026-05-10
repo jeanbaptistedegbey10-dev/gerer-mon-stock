@@ -86,7 +86,8 @@ export const useStore = create((set, get) => ({
       set({ tenant: null, myRole: null, tenantLoaded: true })
     }
   },
-
+   // Dans le store, cette ligne doit exister
+setTenant: (tenant) => set({ tenant }),
   signIn: async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email, password,
