@@ -330,12 +330,13 @@ export default function UsersPage() {
   useEffect(() => { fetchMembers() }, [tenant])
 
   // ── Créer un employé ──────────────────────────────────────────────────────
- const createMember = async ({ email, password, fullName, role }) => {
+const createMember = async ({ email, password, fullName, role }) => {
   const exists = members.find(m =>
     m.email.toLowerCase() === email.toLowerCase()
   )
   if (exists) throw new Error('Cet email existe déjà dans votre équipe.')
 
+  // 1. Créer le compte via client temporaire
   const { createClient } = await import('@supabase/supabase-js')
   const tempClient = createClient(
     import.meta.env.VITE_SUPABASE_URL,
@@ -345,7 +346,7 @@ export default function UsersPage() {
         persistSession:     false,
         autoRefreshToken:   false,
         detectSessionInUrl: false,
-        storageKey:         `temp-${Date.now()}`, // clé unique à chaque fois
+        storageKey:         `temp-${Date.now()}`,
       }
     }
   )
@@ -355,15 +356,13 @@ export default function UsersPage() {
       await tempClient.auth.signUp({
         email:    email.toLowerCase().trim(),
         password,
-        options: {
-          data:            { full_name: fullName },
-          emailRedirectTo: undefined,
-        },
+        options: { data: { full_name: fullName } },
       })
 
     if (signUpError) throw signUpError
     if (!newUser?.user?.id) throw new Error('Compte non créé. Réessayez.')
 
+    // 2. Créer le membership
     const { error: memberError } = await supabase
       .from('tenant_members')
       .insert({
@@ -378,12 +377,34 @@ export default function UsersPage() {
 
     if (memberError) throw memberError
 
+    // 3. Si c'est un livreur → créer aussi dans delivery_drivers
+    if (role === 'livreur') {
+      const { error: driverError } = await supabase
+        .from('delivery_drivers')
+        .insert({
+          tenant_id:      tenant.id,
+          user_id:        user.id,        // owner
+          member_user_id: newUser.user.id,// lien avec le compte
+          name:           fullName.trim(),
+          phone:          email,          // temporaire — à mettre à jour
+          note:           'Livreur',
+          active:         true,
+        })
+
+      if (driverError) {
+        console.warn('Driver creation warning:', driverError.message)
+        // Non bloquant — l'admin peut l'ajouter manuellement
+      }
+    }
+
   } finally {
     await tempClient.auth.signOut()
   }
 
   await fetchMembers()
-  showToast(`Compte de "${fullName}" créé avec succès !`)
+  showToast(`Compte de "${fullName}" créé avec succès !${
+    role === 'livreur' ? ' Ajouté aux livreurs.' : ''
+  }`)
 }
 
   // ── Changer le rôle ───────────────────────────────────────────────────────

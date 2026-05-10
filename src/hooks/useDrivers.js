@@ -34,17 +34,18 @@ export function useDrivers() {
 
   useEffect(() => { fetch() }, [fetch])
 
-  const createDriver = async (data) => {
-    const { error } = await supabase
-      .from('delivery_drivers')
-      .insert({
-        ...data,
-        tenant_id: tenant.id,                // ← tenant_id
-        user_id:   user.id,
-      })
-    if (error) throw error
-    await fetch()
-  }
+  // Dans useDrivers, mettre à jour createDriver
+const createDriver = async (data) => {
+  const { error } = await supabase
+    .from('delivery_drivers')
+    .insert({
+      ...data,
+      tenant_id: tenant.id,
+      user_id:   user.id,
+    })
+  if (error) throw error
+  await fetch()
+}
 
   const updateDriver = async (id, data) => {
     const { error } = await supabase
