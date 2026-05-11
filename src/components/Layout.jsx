@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useStore }         from '../store/useStore'
 import { usePermissions }   from '../hooks/usePermissions'
 import { useNotifications } from '../hooks/useNotifications'
+import { Shield } from 'lucide-react'
 import {
   LayoutDashboard, Package, Warehouse, ShoppingBag,
   DollarSign, Truck, BarChart3, Users, Settings,
@@ -250,6 +251,18 @@ function SidebarContent({ onClose }) {
           </button>
         </div>
       )}
+
+      // Dans SidebarContent, après le bouton "Nouvelle vente"
+{useStore.getState().isSuperAdmin && (
+  <div className="px-3 pb-2">
+    <NavLink to="/superadmin"
+      className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs
+                 text-white/40 hover:text-white hover:bg-white/8 transition-all">
+      <Shield size={13} />
+      Super Admin
+    </NavLink>
+  </div>
+)}
 
       {/* User footer */}
       <div className="px-4 py-4 border-t border-white/10 flex items-center gap-2.5">

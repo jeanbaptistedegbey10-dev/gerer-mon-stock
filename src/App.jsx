@@ -16,6 +16,21 @@ import Drivers         from './pages/Drivers'
 import Reports         from './pages/Reports'
 import UsersPage       from './pages/Users'
 import Settings        from './pages/Settings'
+// Imports à ajouter
+import SuperAdminLayout   from './components/SuperAdminLayout'
+import SuperAdminDash     from './pages/superadmin/Dashboard'
+import SuperAdminTenants  from './pages/superadmin/Tenants'
+import SuperAdminPlans    from './pages/superadmin/Plans'
+import SuperAdminUsers    from './pages/superadmin/SuperUsers'
+
+// Guard Super Admin
+function SuperAdminRoute({ children }) {
+  const { user, isSuperAdmin, loading } = useStore()
+  if (loading) return <Spinner message="Chargement..." />
+  if (!user) return <Navigate to="/login" replace />
+  if (!isSuperAdmin) return <Navigate to="/dashboard" replace />
+  return children
+}
 
 // ── Spinner réutilisable ──────────────────────────────────────────────────────
 function Spinner({ message = 'Chargement...' }) {
@@ -89,6 +104,17 @@ export default function App() {
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
+      <Route path="/superadmin" element={
+  <SuperAdminRoute>
+    <SuperAdminLayout />
+  </SuperAdminRoute>
+}>
+  <Route index           element={<SuperAdminDash />} />
+  <Route path="tenants"  element={<SuperAdminTenants />} />
+  <Route path="plans"    element={<SuperAdminPlans />} />
+  <Route path="users"    element={<SuperAdminUsers />} />
+</Route>
     </Routes>
   )
 }
