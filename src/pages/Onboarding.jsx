@@ -6,7 +6,7 @@ import { Package, Building2, ArrowRight } from 'lucide-react'
 
 export default function Onboarding() {
   const navigate = useNavigate()
-  const { user, tenant, tenantLoaded, loadTenantContext } = useStore()
+  const { user, tenant, tenantLoaded, isSuperAdmin, loadTenantContext } = useStore()
 
   const [companyName, setCompanyName] = useState(
     localStorage.getItem('pending_company') || ''
@@ -14,12 +14,28 @@ export default function Onboarding() {
   const [loading,  setLoading]  = useState(false)
   const [error,    setError]    = useState('')
 
+
   // Si l'user a déjà un tenant chargé → dashboard
-  useEffect(() => {
+  // Dans le useEffect de vérification
+useEffect(() => {
+  const check = async () => {
+    if (!user) { setChecking(false); return }
+
+    // Super admin → bypass onboarding, aller au superadmin dashboard
+    if (isSuperAdmin && !tenant) {
+      navigate('/superadmin', { replace: true })
+      return
+    }
+
     if (tenantLoaded && tenant) {
       navigate('/dashboard', { replace: true })
+      return
     }
-  }, [tenant, tenantLoaded])
+
+    setChecking(false)
+  }
+  check()
+}, [user, tenant, tenantLoaded, isSuperAdmin])
 
   const handleCreate = async (e) => {
     e.preventDefault()

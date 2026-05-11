@@ -10,6 +10,8 @@ import {
   LogOut, Menu, X, Plus, Bell
 } from 'lucide-react'
 
+
+
 const NAV_GROUPS = [
   {
     label: 'Principal',
@@ -119,6 +121,7 @@ function SidebarContent({ onClose }) {
   const { user, signOut }  = useStore()
   const { can, isRole }    = usePermissions()
   const navigate           = useNavigate()
+  const { isSuperAdmin } = useStore()
 
   const initials = (user?.user_metadata?.full_name || user?.email || 'U')
     .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -252,12 +255,18 @@ function SidebarContent({ onClose }) {
         </div>
       )}
 
-      // Dans SidebarContent, après le bouton "Nouvelle vente"
-{useStore.getState().isSuperAdmin && (
+      
+{isSuperAdmin && (
   <div className="px-3 pb-2">
     <NavLink to="/superadmin"
-      className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs
-                 text-white/40 hover:text-white hover:bg-white/8 transition-all">
+      className={({ isActive }) => `
+        flex items-center gap-2 px-3 py-2 rounded-lg text-xs
+        transition-all border-l-2
+        ${isActive
+          ? 'bg-white/12 text-white border-purple-400'
+          : 'text-white/40 hover:text-white hover:bg-white/8 border-transparent'
+        }
+      `}>
       <Shield size={13} />
       Super Admin
     </NavLink>

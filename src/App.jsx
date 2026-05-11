@@ -54,21 +54,23 @@ function Spinner({ message = 'Chargement...' }) {
 
 // ── ProtectedRoute ────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }) {
-  const { user, tenant, loading, tenantLoaded } = useStore()
+  const { user, tenant, myRole, loading, tenantLoaded, isSuperAdmin } = useStore()
 
-  // 1. Chargement initial de l'auth
   if (loading) return <Spinner message="Chargement..." />
 
-  // 2. Pas connecté
   if (!user) return <Navigate to="/login" replace />
 
-  // 3. Connecté mais tenant pas encore chargé → attendre
   if (!tenantLoaded) return <Spinner message="Chargement de votre espace..." />
 
-  // 4. Tenant chargé et vide → onboarding
-  if (tenantLoaded && !tenant) {
+  // Super admin → toujours autorisé même sans tenant
+  if (isSuperAdmin) return children
+
+  // Rediriger vers onboarding seulement si vraiment pas de tenant
+  if (tenantLoaded && !tenant && myRole === null) {
     return <Navigate to="/onboarding" replace />
   }
+
+  if (!tenant) return <Spinner message="Chargement de votre espace..." />
 
   return children
 }

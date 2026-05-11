@@ -41,51 +41,91 @@ export const useStore = create((set, get) => ({
   },
 
   loadTenantContext: async (user) => {
-    try {
-      // 1. Vérifier super admin
-      const { data: sa } = await supabase
-        .from('super_admins')
-        .select('user_id')
+  try {
+    // 1. Vérifier super admin
+    const { data: sa } = await supabase
+      .from('super_admins')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (sa) {
+      // Super admin → charger AUSSI son tenant s'il en a un
+      set({ isSuperAdmin: true, myRole: 'superadmin' })
+
+      // Chercher son membership normal
+      const { data: membership } = await supabase
+        .from('tenant_members')
+        .select('id, role, status, tenant_id')
         .eq('user_id', user.id)
+        .eq('status', 'active')
         .maybeSingle()
 
-      if (sa) {
+      if (membership?.tenant_id) {
+        const { data: tenantData } = await supabase
+          .from('tenants')
+          .select('*')
+          .eq('id', membership.tenant_id)
+          .maybeSingle()
+
+        if (tenantData) {
+          set({
+            tenant:       tenantData,
+            myRole:       'admin',      // dans son entreprise il est admin
+            tenantLoaded: true,
+          })
+          return
+        }
+      }
+
+      // Chercher si owner d'un tenant
+      const { data: ownedTenant } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('owner_id', user.id)
+        .maybeSingle()
+
+      if (ownedTenant) {
         set({
-          isSuperAdmin: true,
-          myRole:       'superadmin',
+          tenant:       ownedTenant,
+          myRole:       'admin',
           tenantLoaded: true,
         })
         return
       }
 
-      // 2. Appeler la fonction SQL sécurisée — bypass RLS
-      const { data, error } = await supabase
-        .rpc('get_my_tenant_context')
-
-      console.log('tenant context:', data, error)
-
-      if (!error && data?.found) {
-        const tenant = typeof data.tenant === 'string'
-          ? JSON.parse(data.tenant)
-          : data.tenant
-
-        set({
-          tenant:       tenant,
-          myRole:       data.role,
-          tenantLoaded: true,
-        })
-        return
-      }
-
-      // 3. Aucun tenant trouvé
-      console.log('No tenant found for:', user.email)
-      set({ tenant: null, myRole: null, tenantLoaded: true })
-
-    } catch (err) {
-      console.error('loadTenantContext error:', err)
-      set({ tenant: null, myRole: null, tenantLoaded: true })
+      // Super admin sans tenant → pas d'onboarding
+      set({ tenant: null, myRole: 'superadmin', tenantLoaded: true })
+      return
     }
-  },
+
+    // 2. Appeler la fonction SQL sécurisée
+    const { data, error } = await supabase
+      .rpc('get_my_tenant_context')
+
+    console.log('tenant context:', data, error)
+
+    if (!error && data?.found) {
+      const tenant = typeof data.tenant === 'string'
+        ? JSON.parse(data.tenant)
+        : data.tenant
+
+      set({
+        tenant:       tenant,
+        myRole:       data.role,
+        tenantLoaded: true,
+      })
+      return
+    }
+
+    // 3. Aucun tenant
+    set({ tenant: null, myRole: null, tenantLoaded: true })
+
+  } catch (err) {
+    console.error('loadTenantContext error:', err)
+    set({ tenant: null, myRole: null, tenantLoaded: true })
+  }
+},
    // Dans le store, cette ligne doit exister
 setTenant: (tenant) => set({ tenant }),
   signIn: async (email, password) => {

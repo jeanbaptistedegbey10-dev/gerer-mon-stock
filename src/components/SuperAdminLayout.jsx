@@ -16,7 +16,7 @@ const NAV = [
 export default function SuperAdminLayout() {
   const { user, signOut } = useStore()
   const navigate          = useNavigate()
-
+  const { tenant } = useStore()
   const handleSignOut = async () => {
     await signOut()
     navigate('/login')
@@ -72,15 +72,16 @@ export default function SuperAdminLayout() {
 
           {/* Retour à l'app */}
           <div className="pt-4 border-t border-white/10 mt-4">
-            <NavLink
-              to="/dashboard"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg
-                         text-sm text-white/50 hover:text-white
-                         hover:bg-white/8 transition-all"
-            >
-              <ChevronRight size={15} className="flex-shrink-0" />
-              Retour à l'app
-            </NavLink>
+            
+<NavLink
+  to={tenant ? '/dashboard' : '/superadmin'}
+  className="flex items-center gap-2.5 px-3 py-2 rounded-lg
+             text-sm text-white/50 hover:text-white
+             hover:bg-white/8 transition-all"
+>
+  <ChevronRight size={15} className="flex-shrink-0" />
+  {tenant ? 'Retour à l\'app' : 'Pas d\'entreprise liée'}
+</NavLink>
           </div>
         </nav>
 
