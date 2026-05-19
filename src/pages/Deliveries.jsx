@@ -282,9 +282,13 @@ export default function Deliveries() {
   const [expanded,       setExpanded]       = useState(null)
 
   // ── Vue livreur — uniquement SES livraisons ───────────────────────────────
-  const baseDeliveries = isRole('livreur')
-    ? deliveries.filter(d => d.driver_id === user?.id)
-    : deliveries
+  // Remplacez le filtre livreur
+    const baseDeliveries = isRole('livreur')
+      ? deliveries.filter(d =>
+          d.driver_user_id === user?.id ||  // ← nouveau champ
+          d.driver_id === user?.id           // ← fallback ancien
+        )
+      : deliveries
 
   // ── Filtrage ──────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {

@@ -12,11 +12,13 @@ import {
 // ── Modal Livreur ─────────────────────────────────────────────────────────────
 function DriverModal({ driver, members, onClose, onSave }) {
   const [form, setForm] = useState({
-    name:           driver?.name           || '',
-    phone:          driver?.phone          || '',
-    note:           driver?.note           || '',
-    member_user_id: driver?.member_user_id || '',
-  })
+  name:           driver?.name              || '',
+  phone:          driver?.phone             || '',
+  note:           driver?.note              || '',
+  member_user_id: driver?.member_user_id    || '',
+  whatsapp_phone:   driver?.whatsapp_phone  || '',
+  whatsapp_api_key: driver?.whatsapp_api_key|| '',
+})
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
 
@@ -40,12 +42,16 @@ function DriverModal({ driver, members, onClose, onSave }) {
     setError('')
     setLoading(true)
     try {
-      await onSave({
-        name:           form.name.trim(),
-        phone:          form.phone.trim(),
-        note:           form.note.trim(),
-        member_user_id: form.member_user_id || null,
-      })
+
+          await onSave({
+      name:             form.name.trim(),
+      phone:            form.phone.trim(),
+      note:             form.note.trim(),
+      member_user_id:   form.member_user_id   || null,
+      whatsapp_phone:   form.whatsapp_phone.trim()   || null,
+      whatsapp_api_key: form.whatsapp_api_key.trim() || null,
+          })
+          
       onClose()
     } catch (err) {
       setError(err.message)
@@ -135,6 +141,53 @@ function DriverModal({ driver, members, onClose, onSave }) {
               required
             />
           </div>
+
+          <div className="border-t border-gray-100 pt-4 mt-2">
+  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3
+                flex items-center gap-1">
+    📱 Notifications WhatsApp
+    <span className="normal-case font-normal text-gray-400 ml-1">
+      (optionnel)
+    </span>
+  </p>
+
+  <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2 mb-3">
+    <p className="text-xs text-green-700 font-medium mb-1">
+      Comment activer ?
+    </p>
+    <p className="text-xs text-green-600">
+      Le livreur envoie <strong>"I allow callmebot to send me messages"</strong>
+      {' '}au <strong>+34 644 59 72 64</strong> sur WhatsApp,
+      puis partage son API Key avec vous.
+    </p>
+  </div>
+
+  <div>
+    <label className="label">Numéro WhatsApp du livreur</label>
+    <input
+      className="input"
+      placeholder="+22890000000"
+      value={form.whatsapp_phone}
+      onChange={set('whatsapp_phone')}
+    />
+    <p className="text-xs text-gray-400 mt-1">
+      Format international sans espaces : +228XXXXXXXX
+    </p>
+  </div>
+
+  <div className="mt-3">
+    <label className="label">API Key CallMeBot</label>
+    <input
+      className="input"
+      placeholder="Ex: 123456"
+      value={form.whatsapp_api_key}
+      onChange={set('whatsapp_api_key')}
+    />
+    <p className="text-xs text-gray-400 mt-1">
+      Reçue par le livreur après activation de CallMeBot
+    </p>
+  </div>
+</div>
 
           {/* Note */}
           <div>
