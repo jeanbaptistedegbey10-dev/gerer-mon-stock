@@ -1,66 +1,45 @@
-import { useState } from 'react'
 import { usePurchases }   from '../hooks/usePurchases'
 import { useProducts }    from '../hooks/useProducts'
 import { useTeamMembers } from '../hooks/useTeamMembers'
 import { usePermissions } from '../hooks/usePermissions'
-import { Plus, X, TrendingDown, Package } from 'lucide-react'
+import {
+  Plus, X, TrendingDown, Package,
+  Edit2, Trash2, Save, RefreshCw
+} from 'lucide-react'
 
-const PERIODS = [
-  { label: '1 jour',     days: 1   },
-  { label: '1 semaine',  days: 7   },
-  { label: '2 semaines', days: 14  },
-  { label: '1 mois',     days: 30  },
-  { label: '3 mois',     days: 90  },
-  { label: '1 an',       days: 365 },
-]
-
-// ── Modal achat ───────────────────────────────────────────────────────────────
-function PurchaseModal({ products, onClose, onSave }) {
+// ── Modal modification achat ──────────────────────────────────────────────────
+function EditPurchaseModal({ purchase, products, onClose, onSave }) {
   const [form, setForm] = useState({
-    product_id: '', product_name: '', supplier: '',
-    quantity_received: '', subtotal: '',
-    transport_cost: '', customs_cost: '',
-    status: 'reçu', notes: '',
+    supplier:          purchase.supplier          || '',
+    quantity_received: purchase.quantity_received || '',
+    transport_cost:    purchase.transport_cost    || '',
+    customs_cost:      purchase.customs_cost      || '',
+    status:            purchase.status            || 'reçu',
+    notes:             purchase.notes             || '',
   })
   const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
+  const [error,   setError]   = useState(false)
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const suppliers = [...new Set(products.map(p => p.supplier).filter(Boolean))]
-
-  const selectedProduct = products.find(p => p.id === form.product_id)
-
-  const handleProductChange = (e) => {
-    const product = products.find(p => p.id === e.target.value)
-    if (!product) return
-    setForm(f => ({
-      ...f,
-      product_id:   product.id,
-      product_name: product.name,
-      supplier:     product.supplier || f.supplier,
-    }))
-  }
-
-  const qty          = parseInt(form.quantity_received)  || 0
-  const prixAchat    = selectedProduct?.purchase_price   || 0
-  const transport    = parseFloat(form.transport_cost)   || 0
-  const douane       = parseFloat(form.customs_cost)     || 0
+  const selectedProduct = products.find(p => p.id === purchase.product_id)
+  const qty          = parseInt(form.quantity_received) || 0
+  const prixAchat    = selectedProduct?.purchase_price  || 0
+  const transport    = parseFloat(form.transport_cost)  || 0
+  const douane       = parseFloat(form.customs_cost)    || 0
   const coutProduits = prixAchat * qty
   const coutTotal    = coutProduits + transport + douane
   const coutUnitaire = qty > 0 ? coutTotal / qty : 0
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.product_id)        return setError('Sélectionnez un produit.')
-    if (!form.quantity_received) return setError('Indiquez la quantité reçue.')
     setError('')
     setLoading(true)
     try {
-      await onSave({
-        product_id:         form.product_id,
-        product_name:       form.product_name,
+      await onSave(purchase.id, {
         supplier:           form.supplier,
+        product_id:         purchase.product_id,
+        product_name:       purchase.product_name,
         quantity_received:  qty,
         subtotal:           coutProduits,
         transport_cost:     transport,
@@ -81,16 +60,16 @@ function PurchaseModal({ products, onClose, onSave }) {
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm
                     flex items-center justify-center p-4">
       <div className="card w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+        <div className="flex items-center justify-between p-5
+                        border-b border-gray-100">
           <h2 className="font-heading font-semibold text-gray-900">
-            Nouvel achat / Réapprovisionnement
+            Modifier l'achat
           </h2>
           <button onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
             <X size={18} />
           </button>
         </div>
-
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {error && (
             <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
@@ -98,126 +77,75 @@ function PurchaseModal({ products, onClose, onSave }) {
             </p>
           )}
 
-          <div>
-            <label className="label">Produit *</label>
-            <select className="input" value={form.product_id}
-              onChange={handleProductChange} required>
-              <option value="">-- Sélectionner un produit --</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} {p.category ? `(${p.category})` : ''}
-                  {' — Stock : '}{p.quantity}
-                </option>
-              ))}
-            </select>
+          {/* Produit — lecture seule */}
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-xs text-gray-500 mb-1">Produit</p>
+            <p className="font-medium text-gray-900">
+              {purchase.product_name}
+            </p>
           </div>
 
           <div>
-            <label className="label">Fournisseur *</label>
-            <select className="input" value={form.supplier}
-              onChange={set('supplier')} required>
-              <option value="">-- Sélectionner --</option>
-              {suppliers.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-              <option value="__autre__">Autre...</option>
-            </select>
-            {form.supplier === '__autre__' && (
-              <input className="input mt-2" placeholder="Nom du fournisseur..."
-                onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} />
-            )}
+            <label className="label">Fournisseur</label>
+            <input className="input" value={form.supplier}
+              onChange={set('supplier')} />
           </div>
 
           <div>
-            <label className="label">Quantité reçue *</label>
-            <input type="number" className="input" placeholder="0" min="1"
+            <label className="label">Quantité reçue</label>
+            <input type="number" min="1" className="input"
               value={form.quantity_received}
-              onChange={set('quantity_received')} required />
-          </div>
-
-          {/* Coût produits — calculé auto */}
-          <div>
-            <label className="label">
-              Coût produits (FCFA)
-              <span className="ml-1 text-gray-400 font-normal">
-                — calculé automatiquement
-              </span>
-            </label>
-            <div className="input bg-gray-50 text-gray-500 cursor-not-allowed
-                            flex items-center justify-between">
-              <span>
-                {selectedProduct
-                  ? `${prixAchat.toLocaleString('fr-FR')} × ${qty || 0}`
-                  : 'Sélectionnez un produit'}
-              </span>
-              <span className="font-semibold text-gray-700">
-                {coutProduits > 0
-                  ? `= ${coutProduits.toLocaleString('fr-FR')} FCFA`
-                  : '—'}
-              </span>
-            </div>
+              onChange={set('quantity_received')} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Transport (FCFA)</label>
-              <input type="number" className="input" placeholder="0" min="0"
-                value={form.transport_cost} onChange={set('transport_cost')} />
+              <input type="number" min="0" className="input"
+                value={form.transport_cost}
+                onChange={set('transport_cost')} />
             </div>
             <div>
               <label className="label">Douane (FCFA)</label>
-              <input type="number" className="input" placeholder="0" min="0"
-                value={form.customs_cost} onChange={set('customs_cost')} />
+              <input type="number" min="0" className="input"
+                value={form.customs_cost}
+                onChange={set('customs_cost')} />
             </div>
           </div>
 
-          {/* Récap coût */}
-          {selectedProduct && qty > 0 && (
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-2">
+          {/* Récap */}
+          {qty > 0 && (
+            <div className="bg-blue-50 border border-blue-100 rounded-xl
+                            p-4 space-y-1.5">
               <div className="flex justify-between text-sm text-blue-700">
                 <span>Coût produits</span>
                 <span>{coutProduits.toLocaleString('fr-FR')} FCFA</span>
               </div>
-              {transport > 0 && (
-                <div className="flex justify-between text-sm text-blue-600">
-                  <span>Transport</span>
-                  <span>+ {transport.toLocaleString('fr-FR')} FCFA</span>
-                </div>
-              )}
-              {douane > 0 && (
-                <div className="flex justify-between text-sm text-blue-600">
-                  <span>Douane</span>
-                  <span>+ {douane.toLocaleString('fr-FR')} FCFA</span>
-                </div>
-              )}
-              <div className="border-t border-blue-200 pt-2 flex justify-between
-                              font-heading font-semibold text-blue-800">
-                <span className="flex items-center gap-1">
-                  <TrendingDown size={14} /> Coût total
-                </span>
+              <div className="flex justify-between font-semibold text-blue-800
+                              border-t border-blue-200 pt-1.5">
+                <span>Coût total</span>
                 <span>{coutTotal.toLocaleString('fr-FR')} FCFA</span>
               </div>
               <div className="flex justify-between text-xs text-blue-600">
                 <span>Coût réel / unité</span>
-                <span className="font-semibold">
-                  {Math.round(coutUnitaire).toLocaleString('fr-FR')} FCFA
-                </span>
+                <span>{Math.round(coutUnitaire).toLocaleString('fr-FR')} FCFA</span>
               </div>
             </div>
           )}
 
           <div>
             <label className="label">Statut</label>
-            <select className="input" value={form.status} onChange={set('status')}>
-              <option value="reçu">Reçu — stock mis à jour immédiatement</option>
+            <select className="input" value={form.status}
+              onChange={set('status')}>
+              <option value="reçu">Reçu</option>
               <option value="en transit">En transit</option>
+              <option value="annulé">Annulé</option>
             </select>
           </div>
 
           <div>
             <label className="label">Notes</label>
             <textarea className="input resize-none" rows={2}
-              placeholder="N° de suivi, détails..."
               value={form.notes} onChange={set('notes')} />
           </div>
 
@@ -226,7 +154,10 @@ function PurchaseModal({ products, onClose, onSave }) {
               className="btn flex-1 justify-center">Annuler</button>
             <button type="submit" disabled={loading}
               className="btn btn-primary flex-1 justify-center">
-              {loading ? 'Enregistrement...' : 'Enregistrer'}
+              {loading
+                ? <><RefreshCw size={13} className="animate-spin" /> Sauvegarde...</>
+                : <><Save size={13} /> Sauvegarder</>
+              }
             </button>
           </div>
         </form>
@@ -235,17 +166,31 @@ function PurchaseModal({ products, onClose, onSave }) {
   )
 }
 
-// ── Page Achats ───────────────────────────────────────────────────────────────
+// Dans le composant Purchases, ajoutez :
 export default function Purchases() {
-  const { purchases, loading, stats, createPurchase, updateStatus } =
-    usePurchases()
+  const {
+    purchases, loading, stats,
+    createPurchase, updatePurchase,
+    deletePurchase, updateStatus
+  } = usePurchases()
   const { products }  = useProducts()
   const { members }   = useTeamMembers()
   const { can }       = usePermissions()
 
   const [modal,          setModal]          = useState(false)
+  const [editModal,      setEditModal]      = useState(null)
   const [period,         setPeriod]         = useState(30)
   const [employeeFilter, setEmployeeFilter] = useState('tous')
+  const [productFilter,  setProductFilter]  = useState('')
+
+  const PERIODS = [
+    { label: '1 jour',     days: 1   },
+    { label: '1 semaine',  days: 7   },
+    { label: '2 semaines', days: 14  },
+    { label: '1 mois',     days: 30  },
+    { label: '3 mois',     days: 90  },
+    { label: '1 an',       days: 365 },
+  ]
 
   const since = new Date()
   since.setDate(since.getDate() - period)
@@ -255,18 +200,37 @@ export default function Purchases() {
     const matchPeriod   = new Date(p.created_at) >= since
     const matchEmployee = employeeFilter === 'tous'
       ? true : p.created_by === employeeFilter
-    return matchPeriod && matchEmployee
+    const matchProduct  = productFilter === ''
+      ? true : p.product_name === productFilter
+    return matchPeriod && matchEmployee && matchProduct
   })
+
+  // Liste produits uniques pour le filtre
+  const allProductNames = [...new Set(
+    purchases.map(p => p.product_name).filter(Boolean)
+  )].sort()
+
+  const getMemberName = (userId) =>
+    members.find(m => m.user_id === userId)?.full_name || '—'
+
+  const handleDelete = async (purchase) => {
+    if (!window.confirm(
+      `Supprimer cet achat ?\n\n` +
+      `${purchase.status === 'reçu'
+        ? '⚠ Le stock sera décrémenté automatiquement.'
+        : ''}`
+    )) return
+    try {
+      await deletePurchase(purchase.id)
+    } catch (err) {
+      alert('Erreur : ' + err.message)
+    }
+  }
 
   const statusColor = s =>
     s === 'reçu'       ? 'pill-green'  :
     s === 'en transit' ? 'pill-orange' :
     'pill-red'
-
-  const getMemberName = (userId) => {
-    const m = members.find(m => m.user_id === userId)
-    return m ? (m.full_name || m.email) : '—'
-  }
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -277,10 +241,9 @@ export default function Purchases() {
             Achats & Réapprovisionnement
           </h1>
           <p className="text-sm text-gray-500">
-            Le stock est mis à jour automatiquement à chaque achat
+            Le stock est mis à jour automatiquement
           </p>
         </div>
-        {/* Bouton — masqué pour comptable */}
         {can('manage_purchases') && (
           <button onClick={() => setModal(true)} className="btn btn-primary">
             <Plus size={15} /> Nouvel achat
@@ -310,26 +273,34 @@ export default function Purchases() {
         </div>
       </div>
 
-      {/* Filtres période + employé */}
-      <div className="flex gap-3 mb-4 flex-wrap items-center">
-        <div className="flex gap-1.5 flex-wrap">
-          {PERIODS.map(p => (
-            <button key={p.days} onClick={() => setPeriod(p.days)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium
-                transition-all border
-                ${period === p.days
-                  ? 'bg-primary text-white border-primary'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-primary/30'
-                }`}>
-              {p.label}
-            </button>
+      {/* Filtres période */}
+      <div className="flex gap-1.5 flex-wrap mb-4">
+        {PERIODS.map(p => (
+          <button key={p.days} onClick={() => setPeriod(p.days)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium
+              transition-all border
+              ${period === p.days
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-primary/30'
+              }`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filtres produit + employé */}
+      <div className="flex gap-3 mb-4 flex-wrap">
+        <select className="input w-auto min-w-48"
+          value={productFilter}
+          onChange={e => setProductFilter(e.target.value)}>
+          <option value="">Tous les produits</option>
+          {allProductNames.map(p => (
+            <option key={p} value={p}>{p}</option>
           ))}
-        </div>
-        <select
-          className="input w-auto min-w-40"
+        </select>
+        <select className="input w-auto min-w-40"
           value={employeeFilter}
-          onChange={e => setEmployeeFilter(e.target.value)}
-        >
+          onChange={e => setEmployeeFilter(e.target.value)}>
           <option value="tous">Tous les employés</option>
           {members.map(m => (
             <option key={m.user_id} value={m.user_id}>
@@ -347,7 +318,9 @@ export default function Purchases() {
       ) : filtered.length === 0 ? (
         <div className="card p-12 text-center">
           <Package size={32} className="text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm mb-4">Aucun achat sur cette période.</p>
+          <p className="text-gray-500 text-sm mb-4">
+            Aucun achat sur cette période.
+          </p>
           {can('manage_purchases') && (
             <button onClick={() => setModal(true)}
               className="btn btn-primary mx-auto">
@@ -365,17 +338,18 @@ export default function Purchases() {
                   <th className="th">Produit</th>
                   <th className="th">Fournisseur</th>
                   <th className="th">Date</th>
-                  <th className="th">Qté reçue</th>
-                  <th className="th">Transport</th>
-                  <th className="th">Douane</th>
+                  <th className="th">Qté</th>
+                  <th className="th">Coût/unité</th>
                   <th className="th">Total</th>
                   <th className="th">Employé</th>
                   <th className="th">Statut</th>
+                  {can('manage_purchases') && <th className="th">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                  <tr key={p.id}
+                    className="hover:bg-gray-50/50 transition-colors">
                     <td className="td font-medium text-primary text-xs">
                       #{p.id.slice(0, 8).toUpperCase()}
                     </td>
@@ -387,19 +361,19 @@ export default function Purchases() {
                       {new Date(p.created_at).toLocaleDateString('fr-FR')}
                     </td>
                     <td className="td">
-                      <span className="pill pill-blue">+{p.quantity_received}</span>
+                      <span className="pill pill-blue">
+                        +{p.quantity_received}
+                      </span>
                     </td>
-                    <td className="td text-gray-500">
-                      {(p.transport_cost || 0).toLocaleString('fr-FR')}
-                    </td>
-                    <td className="td text-gray-500">
-                      {(p.customs_cost || 0).toLocaleString('fr-FR')}
+                    <td className="td text-xs font-medium text-primary">
+                      {p.cout_unitaire_reel
+                        ? `${Math.round(p.cout_unitaire_reel).toLocaleString('fr-FR')} FCFA`
+                        : '—'}
                     </td>
                     <td className="td font-semibold text-gray-900">
                       {(p.total || 0).toLocaleString('fr-FR')}
                       <span className="text-xs text-gray-400 ml-1">FCFA</span>
                     </td>
-                    {/* Employé */}
                     <td className="td text-xs text-gray-500">
                       {getMemberName(p.created_by)}
                     </td>
@@ -408,9 +382,9 @@ export default function Purchases() {
                         <select
                           value={p.status}
                           onChange={e => updateStatus(p.id, e.target.value)}
-                          className={`pill cursor-pointer border-0 bg-transparent
-                            font-medium text-xs outline-none ${statusColor(p.status)}`}
-                        >
+                          className={`pill cursor-pointer border-0
+                            bg-transparent font-medium text-xs outline-none
+                            ${statusColor(p.status)}`}>
                           <option value="en transit">en transit</option>
                           <option value="reçu">reçu</option>
                           <option value="annulé">annulé</option>
@@ -421,6 +395,24 @@ export default function Purchases() {
                         </span>
                       )}
                     </td>
+                    {can('manage_purchases') && (
+                      <td className="td">
+                        <div className="flex gap-1.5">
+                          <button onClick={() => setEditModal(p)}
+                            className="p-1.5 rounded-lg hover:bg-amber-50
+                                       text-amber-500 transition-colors"
+                            title="Modifier">
+                            <Edit2 size={13} />
+                          </button>
+                          <button onClick={() => handleDelete(p)}
+                            className="p-1.5 rounded-lg hover:bg-red-50
+                                       text-red-400 transition-colors"
+                            title="Supprimer">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -429,11 +421,20 @@ export default function Purchases() {
         </div>
       )}
 
+      {/* Modals */}
       {modal && (
         <PurchaseModal
           products={products}
           onClose={() => setModal(false)}
           onSave={createPurchase}
+        />
+      )}
+      {editModal && (
+        <EditPurchaseModal
+          purchase={editModal}
+          products={products}
+          onClose={() => setEditModal(null)}
+          onSave={updatePurchase}
         />
       )}
     </div>

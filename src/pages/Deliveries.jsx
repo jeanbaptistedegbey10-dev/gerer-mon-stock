@@ -278,17 +278,27 @@ export default function Deliveries() {
   const [modal,          setModal]          = useState(false)
   const [search,         setSearch]         = useState('')
   const [statusFilter,   setStatusFilter]   = useState('tous')
-  const [employeeFilter, setEmployeeFilter] = useState('tous')
+  const [driverFilter,   setDriverFilter]   = useState('tous')
   const [expanded,       setExpanded]       = useState(null)
 
+  // ── Extraction des livreurs uniques depuis les livraisons ─────────────────
+  const allDrivers = useMemo(() => {
+    const map = {}
+    deliveries.forEach(d => {
+      if (d.driver_name && d.driver_id) {
+        map[d.driver_id] = d.driver_name
+      }
+    })
+    return Object.entries(map).map(([id, name]) => ({ id, name }))
+  }, [deliveries])
+
   // ── Vue livreur — uniquement SES livraisons ───────────────────────────────
-  // Remplacez le filtre livreur
-    const baseDeliveries = isRole('livreur')
-      ? deliveries.filter(d =>
-          d.driver_user_id === user?.id ||  // ← nouveau champ
-          d.driver_id === user?.id           // ← fallback ancien
-        )
-      : deliveries
+  const baseDeliveries = isRole('livreur')
+    ? deliveries.filter(d =>
+        d.driver_user_id === user?.id ||
+        d.driver_id === user?.id
+      )
+    : deliveries
 
   // ── Filtrage ──────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -298,13 +308,14 @@ export default function Deliveries() {
         (d.client_address || '').toLowerCase().includes(search.toLowerCase()) ||
         (d.client_phone   || '').toLowerCase().includes(search.toLowerCase()) ||
         (d.driver_name    || '').toLowerCase().includes(search.toLowerCase())
-      const matchStatus =
-        statusFilter === 'tous' ? true : d.status === statusFilter
-      const matchEmployee =
-        employeeFilter === 'tous' ? true : d.created_by === employeeFilter
-      return matchSearch && matchStatus && matchEmployee
+      
+      const matchStatus = statusFilter === 'tous' ? true : d.status === statusFilter
+      
+      const matchDriver = driverFilter === 'tous' ? true : d.driver_id === driverFilter
+
+      return matchSearch && matchStatus && matchDriver
     })
-  }, [baseDeliveries, search, statusFilter, employeeFilter])
+  }, [baseDeliveries, search, statusFilter, driverFilter])
 
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer cette livraison ?')) return
@@ -413,18 +424,16 @@ export default function Deliveries() {
           ))}
         </div>
 
-        {/* Filtre employé — admin/manager seulement */}
-        {!isRole('livreur') && !isRole('caissier') && (
+        {/* Filtre livreur — masqué pour le rôle livreur */}
+        {!isRole('livreur') && (
           <select
             className="input w-auto min-w-40"
-            value={employeeFilter}
-            onChange={e => setEmployeeFilter(e.target.value)}
+            value={driverFilter}
+            onChange={e => setDriverFilter(e.target.value)}
           >
-            <option value="tous">Tous les employés</option>
-            {members.map(m => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.full_name || m.email}
-              </option>
+            <option value="tous">Tous les livreurs</option>
+            {allDrivers.map(d => (
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         )}
