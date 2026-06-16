@@ -12,9 +12,9 @@ jobs:
       - name: Ping URLs
         run: |
           for url in \
-            "https://monsite1.vercel.app" \
-            "https://monsite2.vercel.app" \
-            "https://monsite3.com"; do
+            "https://mon-argent.vercel.app/" \
+            "https://gerer-mon-stock.vercel.app/" \
+            "https://afrestyle.vercel.app/"; do
             echo "Ping $url"
             curl -sS -o /dev/null -w "%{http_code}\n" --retry 3 "$url" || echo "Échec: $url"
           done
